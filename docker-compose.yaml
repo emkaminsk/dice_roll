@@ -1,0 +1,10 @@
+version: '1'
+services:
+  dice_be:
+    image: emkaminsk/dice_be:latest
+    ports:
+      - 8081:8081
+  dice_fe:
+    image: emkaminsk/dice_fe:latest
+    ports:
+      - 8000:8000
