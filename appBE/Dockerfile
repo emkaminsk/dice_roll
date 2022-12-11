@@ -1,5 +1,5 @@
-# FROM python:3.8-slim
-FROM python:3.8-bullseye
+FROM python:3.8-slim
+# FROM python:3.8-bullseye
 
 RUN mkdir -p /home/app
 
