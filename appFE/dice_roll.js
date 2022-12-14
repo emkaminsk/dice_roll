@@ -1,4 +1,4 @@
-const form = document.querySelector('form');
+const form = document.querySelector('form[name="Dice"]');
 const diceGraphics = document.querySelector('#dice-graphics');
 const result = document.querySelector('#result');
 

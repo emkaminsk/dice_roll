@@ -9,16 +9,40 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="manifest" href="/site.webmanifest">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <h1>Dice Roller</h1>
-    <form>
-      <label for="max">Maximum number:</label>
-      <input type="number" id="max" name="max" min="1" value="6">
-      <div id="dice-graphics"></div>
-      <button type="submit">Roll</button>
-      <p id="result"></p>
+    <h2>Roll the dice!</h2>
+    <form name="Dice">
+      <pre style="white-space: pre;">         
+        <label for="max">Max number:</label>  
+        <input type="number" id="max" name="max" min="1" value="6" style="width: 50px;">     
+        <div id="dice-graphics"></div> 
+        <button type="submit">Roll</button>        
+        <p id="result"></p>     
+      </pre>
     </form>
-    <script src="script.js"></script>
+    <script src="dice_roll.js"></script>
+    <hr>
+
+    <h2>Randomly choose an option!</h2>
+    <p>Please enter values in the fields below:</p>
+    <form name="Inputs">
+      <label for="input1">Input 1:</label>
+      <input type="text" id="input1" name="input1" class="input-field-init">
+      <br>
+      <label for="input2">Input 2:</label>
+      <input type="text" id="input2" name="input2" class="input-field-init">
+      <br>
+    </form>
+    <form id="inputButtons" name="inputButtons">
+      <button type="button" id="add-field">Add another field</button>
+      <br>
+      <button type="submit" id="draw">Draw</button>
+    </form>
+    <p id="drawing-result"></p>
+    <script src="value_selector.js"></script>
   </body>
 </html>

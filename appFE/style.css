@@ -1,0 +1,32 @@
+/* styles.css */
+/* brulee #FDF5E6; */
+
+body {
+    background-color: #D2B48C;
+    padding: 10px
+  }
+  
+  .creme-light-bg {
+    background-color: #D2B48C;
+  }
+  
+  .narrow-input {
+    width: 50px;
+  }
+
+  .input-field-init {
+    padding: 0px;
+    width: 200px;
+  }
+
+  .input-field {
+    padding: 0px;
+    margin-left: 5px;
+    margin-right: 5px;
+    width: 200px;
+  }
+
+  .button {
+    padding: 5px;
+    margin: 5px;
+  }
