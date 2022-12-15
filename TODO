@@ -1,0 +1,2 @@
+- rewrite README to contain instructions how to build the images from the source
+- replace git clone with curl
