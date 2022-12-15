@@ -21,6 +21,28 @@ Now in your browser go to this page:
 ```http://localhost:8000/```
 and roll the dice!
 
+## How to build it yourself
+
+Instead of pulling the images from Docker Hub, you can build them yourself. To do so, follow these steps:
+
+1. Clone the Git repository into any folder you choose:
+
+```git clone https://github.com/emkaminsk/dice_roll.git```
+
+2. Run the following command to build the images:
+
+```docker build -t my_ver/dice_fe .\appFE```
+```docker build -t my_ver/dice_be .\appBE```
+
+3. In the docker-compose.yaml file, replace the image names with your own:
+
+```image: my_ver/dice_fe```
+```image: my_ver/dice_be```
+
+4. Run the following command to pull start the containers:
+
+```docker-compose up```
+
 ## Front-end
 
 The front-end of the application is a simple HTML page that uses JavaScript to make a request to the back-end API. The JavaScript code is in the index.html file, and it uses the fetch API to make a GET request to the back-end API.
