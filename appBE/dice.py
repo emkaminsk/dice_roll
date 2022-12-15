@@ -32,6 +32,40 @@ class DiceRollRequestHandler(BaseHTTPRequestHandler):
     self.end_headers()
     self.wfile.write(bytes(json.dumps(response_data), 'utf-8'))
 
+
+class OptionsRequestHandler(BaseHTTPRequestHandler):
+  def do_POST(self):
+    # read the data from the request body
+    length = int(self.headers.get('Content-Length'))
+    body = self.rfile.read(length)
+
+    # parse the options data from the request body
+    options = json.loads(body.decode())
+
+    # process the options data as needed
+    # TODO
+
+    # create the response data
+    response_data = {
+        'success': True,
+        'optResult': optResult
+    }
+
+    # send a JSON response with the options data
+    self.send_response(200)
+
+    # add the appropriate CORS headers
+    self.send_header('Access-Control-Allow-Origin', '*')
+    self.send_header('Access-Control-Allow-Methods', 'POST')
+    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+
+    self.send_header('Content-type', 'application/json')
+    self.end_headers()
+    self.wfile.write(bytes(json.dumps(response_data), 'utf-8'))
+
 httpd = HTTPServer(('0.0.0.0', 8081), DiceRollRequestHandler)
+# httpd.server_address('/options', OptionsRequestHandler)
+
+# start the server
 print("Listening on port", httpd.server_port)
 httpd.serve_forever()
