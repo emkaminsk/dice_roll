@@ -14,6 +14,18 @@ body {
     width: 50px;
   }
 
+  .dice {
+    display: inline-block;
+    border: 1px solid black;
+    border-radius: 5px;
+    padding: 10px;
+    margin: 0 5px;
+  }
+
+  .button {
+    margin-top: 5px;
+  }
+
   .input-field-init {
     padding: 0px;
     width: 200px;

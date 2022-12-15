@@ -23,14 +23,6 @@ form.addEventListener('click', (event) => {
           const dice = document.createElement('div');
           dice.classList.add('dice');
           dice.textContent = roll;
-
-          // add styles for the dice graphics
-          dice.style.display = 'inline-block';
-          dice.style.border = '1px solid black';
-          dice.style.borderRadius = '5px';
-          dice.style.padding = '10px';
-          dice.style.margin = '0 5px';
-
           diceGraphics.appendChild(dice);
         }
 
