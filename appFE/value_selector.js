@@ -33,3 +33,37 @@ addFieldButton.addEventListener('click', function() {
     inputNumber++;
 });
 
+async function queryBackendAPI() {
+    // Get the values of the input fields
+
+    var bodyText = '';
+    for (var i = 1; i < inputNumber; i++) {
+        var input = 'input' + i;
+        let inputName = input;
+        input = document.getElementById(input).value;
+        bodyText += inputName + '=' + encodeURIComponent(input) + '&';
+      }
+  
+    // Set the options for the HTTP request
+    var options = {
+      method: 'POST',
+      body: bodyText,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    };
+  
+    // Send the request and get the response
+    var optResponse = await fetch(`http://localhost:8081/option`, options);
+  
+    // If the request is successful, parse the response and get the value
+    if (optResponse.ok) {
+      var optResult = await optResponse.json();
+      var value = optResult.value;
+      // Do something with the value, such as displaying it on the page
+      document.getElementById('optResult').innerHTML = value;
+    } else {
+      // If the request is not successful, display an error message
+      document.getElementById('optResult').innerHTML = 'An error occurred: ' + optResponse.status;
+    }
+  }

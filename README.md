@@ -6,7 +6,7 @@ This is a simple dice roll app that allows you to roll a dice using a JavaScript
 
 This application is available as Docker images on Docker Hub. You can run it using Docker Compose. To do so, follow these steps:
 
-1. Make sure you have Docker installed and working.
+1. Make sure you have [Docker installed](https://docs.docker.com/get-docker/) and working.
 2. On Windows open Command Prompt or BusyBox. On Linux or Mac open a terminal.
 3. Navigate to any folder you choose. 
 4. Run the following command to download the docker-compose.yaml file:
