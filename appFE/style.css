@@ -14,12 +14,21 @@ body {
     width: 50px;
   }
 
+  .block-display {
+    display: block;
+  }
+  
   .dice {
     display: inline-block;
     border: 1px solid black;
     border-radius: 5px;
     padding: 10px;
     margin: 0 5px;
+  }
+
+  .dice-row {
+    display: flex;
+    align-items: center;
   }
 
   .button {

@@ -2,46 +2,50 @@
 <html>
   <head>
     <title>Dice Roller</title>
-    <style>
-      /* styles for the dice graphics and layout go here */
-    </style>
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-    <link rel="manifest" href="/site.webmanifest">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <meta charset="utf-8"> 
   </head>
   <body>
-    <h1>Dice Roller</h1>
-    <h2>Roll the dice!</h2>
-    <form name="Dice">             
-      <label for="max">Max number:</label>  
-      <input type="number" id="max" name="max" min="1" value="6" style="width: 50px;">     
-      <div id="dice-graphics"></div> 
-      <button type="submit" id="rollDice" class="button">Roll</button>        
-      <p id="result"></p>     
-    </form>
-    <script src="dice_roll.js"></script>
-    <hr>
+    <div class="container creme-light-bg mt-4 p-4">
+      <h1 class="text-center mb-4">Dice Roller</h1>
+      <div class="row">
+        <div class="col-md-6">
+          <h2>Roll the dice!</h2>
+          <form name="Dice" class="form-inline">
+            <label for="max" class="mr-2 block-display">Enter the number of sides of the roll:</label>
+            <input type="number" id="max" name="max" min="1" value="6" class="form-control narrow-input block-display">
+            <button type="submit" id="rollDice" class="btn btn-primary mt-2">Roll</button>        
+            <div id="dice-graphics" class="d-inline-block"></div> 
+            <p id="result" class="mt-2"></p>     
+          </form>
+        </div>
+        <div class="col-md-6">
+          <h2>Randomly choose an option!</h2>
+          <p>Please enter values in the fields below:</p>
+          <form name="Inputs" class="form">
+            <div class="form-group">
+              <label for="input1">Input 1:</label>
+              <input type="text" id="input1" name="input1" class="form-control input-field-init">
+            </div>
+            <div class="form-group">
+              <label for="input2">Input 2:</label>
+              <input type="text" id="input2" name="input2" class="form-control input-field-init">
+            </div>
+          </form>
+          <form id="inputButtons" name="inputButtons">
+            <button type="button" id="add-field" class="btn btn-secondary mt-2">Add another field</button>
+            <br>
+            <button type="submit" id="draw" class="btn btn-primary mt-2">Draw</button>
+            <p id="optResult" class="mt-2"></p> 
+          </form>
+          <p id="drawing-result"></p>
+        </div>
+      </div>
+    </div>
 
-    <h2>Randomly choose an option!</h2>
-    <p>Please enter values in the fields below:</p>
-    <form name="Inputs">
-      <label for="input1">Input 1:</label>
-      <input type="text" id="input1" name="input1" class="input-field-init">
-      <br>
-      <label for="input2">Input 2:</label>
-      <input type="text" id="input2" name="input2" class="input-field-init">
-      <br>
-    </form>
-    <form id="inputButtons" name="inputButtons">
-      <button type="button" id="add-field" class="button">Add another field</button>
-      <br>
-      <button type="submit" id="draw" class="button">Draw</button>
-      <p id="optResult"></p> 
-    </form>
-    <p id="drawing-result"></p>
+    <script src="dice_roll.js"></script>
     <script src="value_selector.js"></script>
   </body>
 </html>
