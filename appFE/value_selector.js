@@ -19,7 +19,7 @@ addFieldButton.addEventListener('click', function() {
     input.type = 'text';
     input.id = 'input' + inputNumber;
     input.name = 'input' + inputNumber;
-    input.className = 'input-field';
+    input.className = 'form-control input-field-init';
 
     // Create a new `br` (line break) element
     const br = document.createElement('br');

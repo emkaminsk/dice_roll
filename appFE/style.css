@@ -11,13 +11,13 @@ body {
   }
   
   .narrow-input {
-    width: 50px;
+    width: 70px;
   }
 
   .block-display {
     display: block;
   }
-  
+
   .dice {
     display: inline-block;
     border: 1px solid black;
