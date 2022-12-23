@@ -7,14 +7,14 @@ class DiceRollRequestHandler(BaseHTTPRequestHandler):
   def do_GET(self):
     # parse the query string from the URL
     query_string = parse_qs(urlparse(self.path).query)
-    max = int(query_string.get('max', [6])[0])
+    varMax = int(query_string.get('max', [6])[0])
 
     # generate a random integer in the range 1 to max
-    roll = randint(1, max)
+    roll = randint(1, varMax)
 
     # create the response data
     response_data = {
-        'max': max,
+        'max': varMax,
         'rolls': [roll],
         'total': roll,
         'add_info': "Docker"
@@ -44,6 +44,7 @@ class OptionsRequestHandler(BaseHTTPRequestHandler):
 
     # process the options data as needed
     # TODO
+    optResult = ""
 
     # create the response data
     response_data = {
