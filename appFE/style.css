@@ -58,5 +58,7 @@ body {
     font-weight: bold;
     text-align: left;
     display: inline-block;
+    border: '1px solid red';
+    border-radius: '5px';
   }
   

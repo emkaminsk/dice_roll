@@ -80,13 +80,13 @@ async function queryBackendAPI() {
       if (optResponse.ok) {
         var optResult = await optResponse.json();
         var value = optResult.optResult;
-        console.log("The optResult is " + JSON.stringify(optResult) + " and the value is " + value);
 
         // Do something with the value, such as displaying it on the page
-        document.getElementById('optResult').innerHTML = value;
-        if (document.getElementById('optResult').innerHTML !== '') {
-          document.getElementById('optResult').style.border = '1px solid red';
-          document.getElementById('optResult').style.borderRadius = '5px';
+        var resultElement = document.getElementById('optResult');
+        if (value !== '') {
+          resultElement.innerHTML = 'The result is: <span class="highlight">' + value + '</span>';
+        } else {
+          resultElement.innerHTML = 'There has been no drawing yet';
         }
       } else {
         // If the request is not successful, display an error message

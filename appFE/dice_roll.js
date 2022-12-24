@@ -28,7 +28,7 @@ form.addEventListener('click', (event) => {
         }
 
         // show the result message
-        result.textContent = `You rolled a total of ${data.total}.`;
+        result.innerHTML = `You rolled a total of <span class="highlight"> ${data.total} </span>.`;
       })
       diceButton.classList.remove('btn-secondary');
       diceButton.classList.add('btn-primary');
