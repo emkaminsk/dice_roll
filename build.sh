@@ -1,7 +1,7 @@
 #!/bin/bash
 
 docker container prune -f --filter "name=dice"
-docker rmi $(docker images --filter "name=dice" -q)
+docker rmi $(docker images --format "{{.Repository}}" | grep dice)
 
 docker rmi emkaminsk/dice_fe
 docker rmi emkaminsk/dice_be
