@@ -31,9 +31,9 @@ Instead of pulling the images from Docker Hub, you can build them yourself. To d
 
 2. Run the following command to build the images:
 
-```docker build -t my_ver/dice_fe .\appFE```
+```docker build -t my_ver/dice_fe ./appFE```
 
-```docker build -t my_ver/dice_be .\appBE```
+```docker build -t my_ver/dice_be ./appBE```
 
 3. In the docker-compose.yaml file, replace the image names with your own:
 
