@@ -15,7 +15,7 @@ This application is available as Docker images on Docker Hub. You can run it usi
 
 5. To pull the images and run them, just use the following command:
 
-```docker-compose up```
+```docker-compose up -d```
 
 Now in your browser go to this page:
 ```http://localhost:8000/```
@@ -43,7 +43,7 @@ Instead of pulling the images from Docker Hub, you can build them yourself. To d
 
 4. Run the following command to pull start the containers:
 
-```docker-compose up```
+```docker-compose up -d```
 
 ## Front-end
 
