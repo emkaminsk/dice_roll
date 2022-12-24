@@ -1,6 +1,7 @@
 const resultForm = document.querySelector('form[name="Inputs"]');
 const inputForm = document.querySelector('form[name="inputButtons"]');
 const addFieldButton = inputForm.querySelector('#add-field');
+const addDrawButton = inputForm.querySelector('#btnDraw');
 
 let inputNumber = 3;
 
@@ -33,37 +34,68 @@ addFieldButton.addEventListener('click', function() {
     inputNumber++;
 });
 
+addDrawButton.addEventListener('click', function(event) {
+  event.preventDefault();
+  // rest of the code for selecting a random input value
+});
+
+addDrawButton.onclick = async () => {
+  console.log("Calling the API function...");
+
+  addDrawButton.classList.remove('btn-primary');
+  addDrawButton.classList.add('btn-secondary');
+
+  await queryBackendAPI();
+};
+
 async function queryBackendAPI() {
     // Get the values of the input fields
-
-    var bodyText = '';
+    console.log("Starting preparing API POST options...");
+    var bodyText = {};
     for (var i = 1; i < inputNumber; i++) {
         var input = 'input' + i;
         let inputName = input;
-        input = document.getElementById(input).value;
-        bodyText += inputName + '=' + encodeURIComponent(input) + '&';
+        input = document.getElementById(input).value ;
+        bodyText[inputName] = input;
       }
   
     // Set the options for the HTTP request
+    console.dir("The bodyText is: " + bodyText);
     var options = {
       method: 'POST',
-      body: bodyText,
+      body: JSON.stringify(bodyText),
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/json'
       }
     };
   
     // Send the request and get the response
-    var optResponse = await fetch(`http://localhost:8081/option`, options);
-  
-    // If the request is successful, parse the response and get the value
-    if (optResponse.ok) {
-      var optResult = await optResponse.json();
-      var value = optResult.value;
-      // Do something with the value, such as displaying it on the page
-      document.getElementById('optResult').innerHTML = value;
-    } else {
-      // If the request is not successful, display an error message
-      document.getElementById('optResult').innerHTML = 'An error occurred: ' + optResponse.status;
+    console.log("The options are " + JSON.stringify(options));
+    try {
+      console.log("Sending API POST request...");
+      var optResponse = await fetch(`http://localhost:8081/draw`, options);
+    
+      // If the request is successful, parse the response and get the value
+      console.log("Processing API POST response...");
+      if (optResponse.ok) {
+        var optResult = await optResponse.json();
+        var value = optResult.optResult;
+        console.log("The optResult is " + JSON.stringify(optResult) + " and the value is " + value);
+
+        // Do something with the value, such as displaying it on the page
+        document.getElementById('optResult').innerHTML = value;
+        if (document.getElementById('optResult').innerHTML !== '') {
+          document.getElementById('optResult').style.border = '1px solid red';
+          document.getElementById('optResult').style.borderRadius = '5px';
+        }
+      } else {
+        // If the request is not successful, display an error message
+        document.getElementById('optResult').innerHTML = 'An error occurred: ' + optResponse.status;
+      }
+    } catch (error) {
+      // If an error occurs, display an error message
+      console.error(error);
     }
+    addDrawButton.classList.remove('btn-secondary');
+    addDrawButton.classList.add('btn-primary');
   }

@@ -51,3 +51,12 @@ body {
     padding: 5px;
     margin: 5px;
   }
+
+  .highlight {
+    color: red;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: left;
+    display: inline-block;
+  }
+  

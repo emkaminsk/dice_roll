@@ -7,7 +7,8 @@ const result = document.querySelector('#result');
 form.addEventListener('click', (event) => {
   if (event.target === diceButton) {
     event.preventDefault();
-
+    diceButton.classList.remove('btn-primary');
+    diceButton.classList.add('btn-secondary');
     // get the max value from the form input
     const max = document.querySelector('#max').value;
 
@@ -29,5 +30,7 @@ form.addEventListener('click', (event) => {
         // show the result message
         result.textContent = `You rolled a total of ${data.total}.`;
       })
+      diceButton.classList.remove('btn-secondary');
+      diceButton.classList.add('btn-primary');
     };
   });
