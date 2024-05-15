@@ -3,84 +3,63 @@ from random import randint
 from urllib.parse import parse_qs, urlparse
 import json
 
-# class DiceRollRequestHandler(BaseHTTPRequestHandler):
-  
+class DiceRollRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed_path = urlparse(self.path)
+        if parsed_path.path == '/dice-roll/':
+            query_string = parse_qs(parsed_path.query)
+            varMax = int(query_string.get('max', [6])[0])
+            roll = randint(1, varMax)
+            response_data = {
+                'max': varMax,
+                'rolls': [roll],
+                'total': roll,
+                'add_info': "Docker"
+            }
 
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(bytes(json.dumps(response_data), 'utf-8'))
+        else:
+            self.send_error(404, "Not Found")
 
-class OptionsRequestHandler(BaseHTTPRequestHandler):
-  def do_GET(self):
-    # parse the query string from the URL
-    query_string = parse_qs(urlparse(self.path).query)
-    varMax = int(query_string.get('max', [6])[0])
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
-    # generate a random integer in the range 1 to max
-    roll = randint(1, varMax)
+    def do_POST(self):
+        parsed_path = urlparse(self.path)
+        if parsed_path.path == '/draw':
+            length = int(self.headers.get('Content-Length'))
+            body = self.rfile.read(length)
+            options = json.loads(body.decode())
+            roll = randint(1, len(options.values()))
+            optResult = list(options.values())[roll-1]
 
-    # create the response data
-    response_data = {
-        'max': varMax,
-        'rolls': [roll],
-        'total': roll,
-        'add_info': "Docker"
-    }
+            response_data = {
+                'success': True,
+                'optResult': optResult
+            }
 
-    self = headers(self)
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(bytes(json.dumps(response_data), 'utf-8'))
+        else:
+            self.send_error(404, "Not Found")
 
-    self.send_header('Content-type', 'application/json')
-    self.end_headers()
-    self.wfile.write(bytes(json.dumps(response_data), 'utf-8'))
+def run(server_class=HTTPServer, handler_class=DiceRollRequestHandler, port=8081):
+    server_address = ('0.0.0.0', port)
+    httpd = server_class(server_address, handler_class)
+    print(f"Listening on port {port}")
+    httpd.serve_forever()
 
-  def do_OPTIONS(self):
-    print(f"Received request in do_OPTIONS")
-    
-    self = headers(self)
-    
-    self.end_headers()
-    self.wfile.write(b'')
-    print("Quitting OPTIONS request")
+if __name__ == "__main__":
+    run()
 
-  def do_POST(self):
-    print("Received POST request")
-    # read the data from the request body
-    length = int(self.headers.get('Content-Length'))
-    body = self.rfile.read(length)
-
-    # parse the options data from the request body
-    options = json.loads(body.decode())
-    print(f"The options are {options}")
-    # process the options data as needed
-    roll = randint(1, len(options.values()))
-    print(options, '\n', options.values(), '\n', list(options.values()), '\n', len(options.values()), '\n', roll)
-    optResult = list(options.values())[roll-1]
-
-    # create the response data
-    response_data = {
-        'success': True,
-        'optResult': optResult
-    }
-
-    print(response_data)
-    self = headers(self)
-
-    self.send_header('Content-type', 'application/json')
-    self.end_headers()
-    self.wfile.write(bytes(json.dumps(response_data), 'utf-8'))
-
-def headers(self):
-    
-  # send a JSON response with the options data
-  self.send_response(200)
-
-  # add the appropriate CORS headers
-  self.send_header('Access-Control-Allow-Origin', '*')
-  self.send_header('Access-Control-Allow-Methods', 'POST')
-  self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-  return self
-
-# httpd = HTTPServer(('0.0.0.0', 8081), DiceRollRequestHandler)
-httpd = HTTPServer(('0.0.0.0', 8081), OptionsRequestHandler)
-# httpd.server_address('/options', OptionsRequestHandler)
-
-# start the server
-print("Listening on port", httpd.server_port)
-httpd.serve_forever()
