@@ -3,10 +3,10 @@ from random import randint
 from urllib.parse import parse_qs, urlparse
 import json
 
-class DiceRollRequestHandler(BaseHTTPRequestHandler):
+class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed_path = urlparse(self.path)
-        if parsed_path.path == '/dice-roll/':
+        if parsed_path.path == '/dice-roll':
             query_string = parse_qs(parsed_path.query)
             varMax = int(query_string.get('max', [6])[0])
             roll = randint(1, varMax)
@@ -58,7 +58,7 @@ class DiceRollRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404, "Not Found")
 
-def run(server_class=HTTPServer, handler_class=DiceRollRequestHandler, port=8081):
+def run(server_class=HTTPServer, handler_class=RequestHandler, port=8081):
     server_address = ('0.0.0.0', port)
     httpd = server_class(server_address, handler_class)
     print(f"Listening on port {port}")

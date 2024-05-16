@@ -1,5 +1,7 @@
 #!/bin/bash
 
+docker compose down
+
 docker container prune -f --filter "name=dice"
 docker rmi $(docker images --format "{{.Repository}}" | grep dice)
 
@@ -12,3 +14,5 @@ docker build -t emkaminsk/dice_be ./appBE
 
 docker push emkaminsk/dice_fe
 docker push emkaminsk/dice_be
+
+docker compose up -d

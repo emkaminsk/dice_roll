@@ -1,7 +1,6 @@
 version: '3.8'
 services:
   dice_be:
-    build: .
     image: emkaminsk/dice_be:latest
     ports:
       - 8081:8081
