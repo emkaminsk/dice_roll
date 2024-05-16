@@ -2,6 +2,10 @@
 
 This is a simple dice roll app that allows you to roll a dice using a JavaScript front-end and a Python back-end.
 
+## Website
+
+You can try out the app at [https://diceroll.byst.re/](https://diceroll.byst.re/)
+
 ## How to run it
 
 This application is available as Docker images on Docker Hub. You can run it using Docker Compose. To do so, follow these steps:
@@ -44,6 +48,8 @@ Instead of pulling the images from Docker Hub, you can build them yourself. To d
 4. Run the following command to pull start the containers:
 
 ```docker-compose up -d```
+
+The build.sh script automates the process of shutting the containers, cleaning, rebuilding images and starting the docker-compose again. However you would need to provide credentials to your Docker Hub and modify the address in the code.
 
 ## Front-end
 
