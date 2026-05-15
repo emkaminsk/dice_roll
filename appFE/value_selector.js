@@ -73,8 +73,8 @@ async function queryBackendAPI() {
     console.log("The options are " + JSON.stringify(options));
     try {
       console.log("Sending API POST request...");
-      var optResponse = await fetch(`/draw`, options);
-    
+      var optResponse = await fetch(`http://dice_be:8081/draw`, options);
+
       // If the request is successful, parse the response and get the value
       console.log("Processing API POST response...");
       if (optResponse.ok) {
