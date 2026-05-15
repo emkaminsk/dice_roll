@@ -14,7 +14,7 @@ form.addEventListener('click', (event) => {
 
     // send the max value to the backend using a REST API
     // and display the result
-    fetch(`http://dice_be:8081/dice-roll?max=${max}`)
+    fetch(`/dice-roll?max=${max}`)
       .then((response) => response.json())
       .then((data) => {
         diceGraphics.innerHTML = ''; // clear previous dice graphics
