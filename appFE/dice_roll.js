@@ -1,36 +1,28 @@
-const form = document.querySelector('form[name="Dice"]');
-const diceGraphics = document.querySelector('#dice-graphics');
-const diceButton = document.querySelector('#rollDice');
-const result = document.querySelector('#result');
+// Dice Roller — uniform roll in [1, N] computed in the browser (no back-end).
+(function () {
+  const form = document.querySelector('form[name="Dice"]');
+  const maxInput = document.querySelector('#max');
+  const diceGraphics = document.querySelector('#dice-graphics');
+  const result = document.querySelector('#result');
 
-// handle form submission
-form.addEventListener('click', (event) => {
-  if (event.target === diceButton) {
+  form.addEventListener('submit', (event) => {
     event.preventDefault();
-    diceButton.classList.remove('btn-primary');
-    diceButton.classList.add('btn-secondary');
-    // get the max value from the form input
-    const max = document.querySelector('#max').value;
 
-    // send the max value to the backend using a REST API
-    // and display the result
-    fetch(`/dice-roll?max=${max}`)
-      .then((response) => response.json())
-      .then((data) => {
-        diceGraphics.innerHTML = ''; // clear previous dice graphics
+    // Clamp to a sane number of sides; fall back to the default of 6 (US-002).
+    let sides = parseInt(maxInput.value, 10);
+    if (!Number.isFinite(sides) || sides < 1) {
+      sides = 6;
+      maxInput.value = 6;
+    }
 
-        // show the rolled dice
-        for (const roll of data.rolls) {
-          const dice = document.createElement('div');
-          dice.classList.add('dice');
-          dice.textContent = roll;
-          diceGraphics.appendChild(dice);
-        }
+    const roll = randomInt(1, sides);
 
-        // show the result message
-        result.innerHTML = `You rolled a total of <span class="highlight"> ${data.total} </span>.`;
-      })
-      diceButton.classList.remove('btn-secondary');
-      diceButton.classList.add('btn-primary');
-    };
+    diceGraphics.innerHTML = '';
+    const die = document.createElement('div');
+    die.className = 'die';
+    die.textContent = roll;
+    diceGraphics.appendChild(die);
+
+    result.innerHTML = `You rolled <span class="highlight">${roll}</span> on a ${sides}-sided die.`;
   });
+})();

@@ -1,6 +1,16 @@
-# Dice Roll app
+# Dice Roll & Random Picker
 
-This is a simple dice roll app that allows you to roll a dice using a JavaScript front-end and a Python back-end.
+A lightweight, browser-based collection of fair random-selection tools. No login, no
+installation, nothing stored — reload the page to start fresh. It bundles three
+independent tools on a single page:
+
+- **🎲 Dice Roller** — roll a die with any number of sides.
+- **🎡 Wheel of Fortune** — type a list of names and spin an animated wheel to pick a winner.
+- **🎯 Random Picker** — enter options and draw one at random; add as many independent picker sections as you like.
+
+All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
+for uniform, unbiased results. The wheel is rendered on a `<canvas>` with
+`requestAnimationFrame`. There is **no back-end** — everything runs client-side.
 
 ## Website
 
@@ -8,63 +18,56 @@ You can try out the app at [https://diceroll.byst.re/](https://diceroll.byst.re/
 
 ## How to run it
 
-This application is available as Docker images on Docker Hub. You can run it using Docker Compose. To do so, follow these steps:
+The app is a set of static files in `appFE/`. Any static web server works.
 
-1. Make sure you have [Docker installed](https://docs.docker.com/get-docker/) and working.
-2. On Windows open Command Prompt or BusyBox. On Linux or Mac open a terminal.
-3. Navigate to any folder you choose. 
-4. Run the following command to download the docker-compose.yaml file:
+```bash
+cd appFE
+python3 -m http.server 8000
+```
 
-```curl -Lo docker-compose.yaml https://github.com/emkaminsk/dice_roll/raw/master/docker-compose.yaml```
+Then open `http://localhost:8000/` in your browser.
 
-5. To pull the images and run them, just use the following command:
+In production it is served as static files by nginx — deployment is simply copying
+the contents of `appFE/` to the web root.
 
-```docker-compose up -d```
+## Tech stack
 
-Now in your browser go to this page:
-```http://localhost:8000/```
-and roll the dice!
+HTML5, Bootstrap 4, and vanilla JavaScript (ES2015+). No build step, no framework, no
+server-side code. See [`.ai/tech-stack.md`](.ai/tech-stack.md) for the rationale.
 
-## How to build it yourself
+## Project structure
 
-Instead of pulling the images from Docker Hub, you can build them yourself. To do so, follow these steps:
+```
+appFE/
+  index.html         # single page, three tools
+  style.css          # modern-clean custom theme
+  random.js          # shared uniform RNG (crypto.getRandomValues)
+  dice_roll.js       # dice roller
+  value_selector.js  # add/remove independent picker sections
+  wheel.js           # canvas Wheel of Fortune
+tests/
+  test_app.py        # Playwright end-to-end tests
+```
 
-1. Clone the Git repository into any folder you choose:
+## Tests
 
-```git clone https://github.com/emkaminsk/dice_roll.git```
+End-to-end tests live in `tests/` and use [Playwright](https://playwright.dev/python/)
+to drive a headless browser against the static front-end (served automatically by the
+test fixture). They cover the dice, picker, and wheel tools and assert there are no
+console errors.
 
-2. Run the following command to build the images:
+Run from the repository root with [uv](https://docs.astral.sh/uv/):
 
-```docker build -t my_ver/dice_fe ./appFE```
+```bash
+# One-time: install the headless Chromium browser binary
+uv run --with playwright playwright install chromium
 
-```docker build -t my_ver/dice_be ./appBE```
+# Run the suite
+uv run --with playwright --with pytest pytest tests/
+```
 
-3. In the docker-compose.yaml file, replace the image names with your own:
-
-```image: my_ver/dice_fe```
-
-```image: my_ver/dice_be```
-
-4. Run the following command to pull start the containers:
-
-```docker-compose up -d```
-
-The build.sh script automates the process of shutting the containers, cleaning, rebuilding images and starting the docker-compose again. However you would need to provide credentials to your Docker Hub and modify the address in the code.
-
-## Front-end
-
-The front-end of the application is a simple HTML page that uses JavaScript to make a request to the back-end API. The JavaScript code is in the index.html file, and it uses the fetch API to make a GET request to the back-end API.
-
-## Back-end
-
-The back-end of the application is a Python script that uses the http.server library to serve the API. The Python code is in the dice.py file, and it defines a DiceRollRequestHandler class that extends the BaseHTTPRequestHandler class from the http.server library. The DiceRollRequestHandler class implements a do_GET method that handles incoming GET requests and returns a JSON response with the dice roll result.
-
-## Docker
-
-Once the container is running, you can access the front-end by visiting http://localhost:8000/ in your web browser. If you wish you can access the back-end API separately by making a GET request to http://localhost:8081/dice-roll/?max=6, where 6 is the maximum value of the dice roll.
-
-Both images are built using slim base - ca 124MB.
+The tests serve `appFE/` on a local port, so no server needs to be running beforehand.
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License.

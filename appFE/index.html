@@ -1,54 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title>Dice Roller</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dice Roll &amp; Random Picker</title>
+    <meta name="description" content="A lightweight set of fair, in-browser random tools: roll a dice, pick a random option, and spin the wheel.">
+    <link rel="icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <meta charset="utf-8"> 
   </head>
   <body>
-    <div class="container creme-light-bg mt-4 p-4">
-      <h1 class="text-center mb-4">Dice Roller</h1>
-      <div class="row">
-        <div class="col-md-6">
-          <h2>Roll the dice!</h2>
-          <form name="Dice" class="form">
-            <div class="form-group">
-              <label for="max">How many sides has the dice:</label>
-              <input type="number" id="max" name="max" min="1" value="6" class="form-control mt-2 narrow-input"> 
-            </div>
-            <div class="form-group">
-              <button type="submit" id="rollDice" class="btn mt-2 btn-primary">Roll</button>
-            </div>
-            <div id="dice-graphics" class="d-inline-block"></div> 
-            <p id="result" class="mt-2"></p>     
-          </form>
-        </div>
-        <div class="col-md-6">
-          <h2>Randomly choose an option!</h2>
-          <p>Please enter values in the fields below:</p>
-          <form name="Inputs" class="form">
-            <div class="form-group">
-              <label for="input1">Input 1:</label>
-              <input type="text" id="input1" name="input1" class="form-control input-field-init">
-            </div>
-            <div class="form-group">
-              <label for="input2">Input 2:</label>
-              <input type="text" id="input2" name="input2" class="form-control input-field-init">
-            </div>
-          </form>
-          <form id="inputButtons" name="inputButtons">
-            <button type="button" id="add-field" class="btn btn-secondary mt-2">Add another field</button>
-            <br>
-            <button type="submit" id="btnDraw" class="btn btn-primary mt-2">Draw</button>            
-          </form>
-          <p id="optResult" class="mt-4"></p>
-        </div>
-      </div>
-    </div>
+    <header class="page-header">
+      <h1>Dice Roll &amp; Random Picker</h1>
+      <p class="tagline">Fair, instant, in-browser random choices — no login, nothing stored.</p>
+    </header>
 
-    <script src="dice_roll.js?v=2"></script>
-    <script src="value_selector.js?v=2"></script>
+    <main class="container">
+      <div class="tools-grid">
+        <!-- Dice Roller -->
+        <section class="tool-card" aria-labelledby="dice-title">
+          <h2 id="dice-title">🎲 Roll the dice</h2>
+          <form name="Dice" novalidate>
+            <div class="form-group">
+              <label for="max">Number of sides</label>
+              <input type="number" id="max" name="max" min="1" value="6" class="form-control narrow-input">
+            </div>
+            <button type="submit" class="btn btn-primary">Roll</button>
+            <div id="dice-graphics" class="dice-graphics"></div>
+            <p id="result" class="result-line"></p>
+          </form>
+        </section>
+
+        <!-- Wheel of Fortune -->
+        <section class="tool-card" aria-labelledby="wheel-title">
+          <h2 id="wheel-title">🎡 Spin the wheel</h2>
+          <div class="wheel-stage">
+            <div class="wheel-pointer" aria-hidden="true"></div>
+            <canvas id="wheel-canvas" role="img" aria-label="Wheel of names"></canvas>
+          </div>
+          <div id="wheel-names" class="name-list"></div>
+          <div class="btn-row">
+            <button type="button" id="wheel-add" class="btn btn-outline-secondary btn-sm">Add name</button>
+            <button type="button" id="wheel-spin" class="btn btn-primary btn-sm">Spin</button>
+          </div>
+          <p id="wheel-result" class="result-line"></p>
+        </section>
+      </div>
+
+      <!-- Random pickers (one-or-more independent sections) -->
+      <section class="pickers" aria-labelledby="picker-title">
+        <div class="pickers-head">
+          <h2 id="picker-title">🎯 Randomly choose an option</h2>
+          <button type="button" id="add-section" class="btn btn-outline-secondary btn-sm">Add picker</button>
+        </div>
+        <div id="picker-sections" class="picker-grid"></div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>Everything runs in your browser. Reload to start fresh.</p>
+    </footer>
+
+    <script src="random.js"></script>
+    <script src="dice_roll.js"></script>
+    <script src="value_selector.js"></script>
+    <script src="wheel.js"></script>
   </body>
 </html>

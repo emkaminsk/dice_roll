@@ -1,101 +1,100 @@
-const resultForm = document.querySelector('form[name="Inputs"]');
-const inputForm = document.querySelector('form[name="inputButtons"]');
-const addFieldButton = inputForm.querySelector('#add-field');
-const addDrawButton = inputForm.querySelector('#btnDraw');
+// Randomly choose an option! — multiple independent picker sections (FR-011/012).
+// Each section has its own option fields, Draw action, and result; all in-browser.
+(function () {
+  const container = document.querySelector('#picker-sections');
+  const addSectionBtn = document.querySelector('#add-section');
+  let sectionSeq = 0;
 
-let inputNumber = 3;
-
-addFieldButton.addEventListener('click', function() {
-    // Create a new `label` element
-    const label = document.createElement('label');
-
-    // Set the `for` and `innerHTML` attributes for the element
-    label.htmlFor = 'input' + inputNumber;
-    label.innerHTML = 'Input ' + inputNumber + ':';
-
-    // Create a new `input` element
+  function makeField(index) {
+    const wrap = document.createElement('div');
+    wrap.className = 'form-group';
     const input = document.createElement('input');
-
-    // Set the `type`, `id` and `name` attributes for the element
     input.type = 'text';
-    input.id = 'input' + inputNumber;
-    input.name = 'input' + inputNumber;
-    input.className = 'form-control input-field-init';
-
-    // Create a new `br` (line break) element
-    const br = document.createElement('br');
-
-    // Append the new `input` element to the form
-    resultForm.append(label);
-    resultForm.append(input);
-    resultForm.append(br);
-
-    // Increment the inputNumber variable
-    inputNumber++;
-});
-
-addDrawButton.addEventListener('click', function(event) {
-  event.preventDefault();
-  // rest of the code for selecting a random input value
-});
-
-addDrawButton.onclick = async () => {
-  console.log("Calling the API function...");
-
-  addDrawButton.classList.remove('btn-primary');
-  addDrawButton.classList.add('btn-secondary');
-
-  await queryBackendAPI();
-};
-
-async function queryBackendAPI() {
-    // Get the values of the input fields
-    console.log("Starting preparing API POST options...");
-    var bodyText = {};
-    for (var i = 1; i < inputNumber; i++) {
-        var input = 'input' + i;
-        let inputName = input;
-        input = document.getElementById(input).value ;
-        bodyText[inputName] = input;
-      }
-  
-    // Set the options for the HTTP request
-    console.dir("The bodyText is: " + bodyText);
-    var options = {
-      method: 'POST',
-      body: JSON.stringify(bodyText),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    };
-  
-    // Send the request and get the response
-    console.log("The options are " + JSON.stringify(options));
-    try {
-      console.log("Sending API POST request...");
-      var optResponse = await fetch(`http://dice_be:8081/draw`, options);
-
-      // If the request is successful, parse the response and get the value
-      console.log("Processing API POST response...");
-      if (optResponse.ok) {
-        var optResult = await optResponse.json();
-        var value = optResult.optResult;
-
-        // Do something with the value, such as displaying it on the page
-        var resultElement = document.getElementById('optResult');
-        if (value !== '') {
-          resultElement.innerHTML = 'The result is: <span class="highlight">' + value + '</span>';
-        } else {
-          resultElement.innerHTML = 'There has been no drawing yet';
-        }
-      } else {
-        // If the request is not successful, display an error message
-        document.getElementById('optResult').innerHTML = 'An error occurred: ' + optResponse.status;
-      }
-    } catch (error) {
-      // If an error occurs, display an error message
-      console.error(error);
-    }
-    addDrawButton.classList.remove('btn-secondary');
-    addDrawButton.classList.add('btn-primary');
+    input.className = 'form-control option-field';
+    input.placeholder = `Option ${index}`;
+    input.setAttribute('aria-label', `Option ${index}`);
+    wrap.appendChild(input);
+    return wrap;
   }
+
+  function createSection(removable) {
+    sectionSeq += 1;
+    const id = sectionSeq;
+
+    const section = document.createElement('div');
+    section.className = 'tool-card picker-section';
+
+    const head = document.createElement('div');
+    head.className = 'picker-head';
+    const title = document.createElement('h3');
+    title.textContent = `Picker ${id}`;
+    head.appendChild(title);
+
+    if (removable) {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn btn-link btn-remove';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => section.remove());
+      head.appendChild(removeBtn);
+    }
+    section.appendChild(head);
+
+    const fields = document.createElement('div');
+    fields.className = 'option-fields';
+    fields.appendChild(makeField(1));
+    fields.appendChild(makeField(2));
+    section.appendChild(fields);
+
+    const actions = document.createElement('div');
+    actions.className = 'btn-row';
+
+    const addFieldBtn = document.createElement('button');
+    addFieldBtn.type = 'button';
+    addFieldBtn.className = 'btn btn-outline-secondary btn-sm';
+    addFieldBtn.textContent = 'Add field';
+    addFieldBtn.addEventListener('click', () => {
+      fields.appendChild(makeField(fields.children.length + 1));
+    });
+
+    const drawBtn = document.createElement('button');
+    drawBtn.type = 'button';
+    drawBtn.className = 'btn btn-primary btn-sm';
+    drawBtn.textContent = 'Draw';
+
+    actions.appendChild(addFieldBtn);
+    actions.appendChild(drawBtn);
+    section.appendChild(actions);
+
+    const resultEl = document.createElement('p');
+    resultEl.className = 'result-line';
+    section.appendChild(resultEl);
+
+    drawBtn.addEventListener('click', () => {
+      const values = Array.from(fields.querySelectorAll('.option-field'))
+        .map((el) => el.value.trim())
+        .filter((v) => v !== '');
+
+      if (values.length === 0) {
+        resultEl.innerHTML = '<span class="muted">No options entered yet — type something to draw.</span>';
+        return;
+      }
+      const choice = values[randomIndex(values.length)];
+      resultEl.innerHTML = `Picked: <span class="highlight">${escapeHtml(choice)}</span>`;
+    });
+
+    return section;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  // First section is permanent; added sections are removable (US-007/008).
+  container.appendChild(createSection(false));
+  addSectionBtn.addEventListener('click', () => {
+    container.appendChild(createSection(true));
+  });
+})();

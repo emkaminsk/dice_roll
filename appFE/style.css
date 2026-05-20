@@ -1,64 +1,185 @@
-/* styles.css */
-/* brulee #FDF5E6; */
+/* Dice Roll & Random Picker — modern clean theme. */
+
+:root {
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --accent: #4f46e5;
+  --accent-ink: #4338ca;
+  --highlight: #4f46e5;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+* { box-sizing: border-box; }
 
 body {
-    background-color: #D2B48C;
-    padding: 10px
-  }
-  
-  .creme-light-bg {
-    background-color: #D2B48C;
-  }
-  
-  .narrow-input {
-    width: 70px;
-  }
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0 0 48px;
+  line-height: 1.5;
+}
 
-  .block-display {
-    display: block;
-  }
+.page-header {
+  text-align: center;
+  padding: 48px 16px 24px;
+}
+.page-header h1 {
+  font-weight: 700;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+.tagline {
+  color: var(--muted);
+  margin: 0;
+  font-size: 1.02rem;
+}
 
-  .dice {
-    display: inline-block;
-    border: 1px solid black;
-    border-radius: 5px;
-    padding: 10px;
-    margin: 0 5px;
-  }
+.container { max-width: 960px; }
 
-  .dice-row {
-    display: flex;
-    align-items: center;
-  }
+.tools-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 720px) {
+  .tools-grid { grid-template-columns: 1fr; }
+}
 
-  .button {
-    margin-top: 5px;
-  }
+.tool-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+.tool-card h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 18px;
+}
+.tool-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
 
-  .input-field-init {
-    padding: 0px;
-    width: 200px;
-  }
+label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
 
-  .input-field {
-    padding: 0px;
-    margin-left: 5px;
-    margin-right: 5px;
-    width: 200px;
-  }
+.form-control {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  transition: border-color .15s, box-shadow .15s;
+}
+.form-control:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+.narrow-input { width: 96px; }
 
-  .button {
-    padding: 5px;
-    margin: 5px;
-  }
+.btn {
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
+.btn:disabled { opacity: .55; }
+.btn-remove {
+  color: var(--muted);
+  padding: 0 8px;
+  font-size: 1.1rem;
+  text-decoration: none;
+}
+.btn-remove:hover { color: #ef4444; }
 
-  .highlight {
-    color: red;
-    font-size: 18px;
-    font-weight: bold;
-    text-align: left;
-    display: inline-block;
-    border: '1px solid red';
-    border-radius: '5px';
-  }
-  
+.btn-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+
+/* Dice */
+.dice-graphics { margin-top: 16px; min-height: 0; }
+.die {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(145deg, #fff, #eef2ff);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  box-shadow: var(--shadow);
+}
+
+.result-line { margin-top: 14px; min-height: 1.4em; }
+.highlight {
+  color: var(--highlight);
+  font-weight: 700;
+}
+.muted { color: var(--muted); }
+
+/* Wheel */
+.wheel-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+#wheel-canvas { max-width: 100%; }
+.wheel-pointer {
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 20px solid var(--accent);
+  z-index: 2;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.2));
+}
+.name-list { display: flex; flex-direction: column; gap: 8px; }
+.name-row { display: flex; align-items: center; gap: 6px; }
+
+/* Pickers */
+.pickers { margin-top: 28px; }
+.pickers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.pickers-head h2 { font-size: 1.2rem; font-weight: 600; margin: 0; }
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.option-fields { display: flex; flex-direction: column; gap: 8px; }
+.option-fields .form-group { margin: 0; }
+
+.page-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 40px;
+}
