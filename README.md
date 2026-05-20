@@ -42,6 +42,9 @@ root that nginx serves. No application server, Docker, or open API ports are req
 1. **Copy the files to the server** (from your machine):
 
    ```bash
+   sudo rsync -av --delete /home/marcin/gitrepos/dice_roll/appFE/ /var/www/diceroll
+   ```
+   ```bash
    rsync -av --delete appFE/ user@your-server:/var/www/diceroll/
    ```
 
