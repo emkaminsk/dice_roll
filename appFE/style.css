@@ -107,20 +107,57 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
 .btn-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 
 /* Dice */
-.dice-graphics { margin-top: 16px; min-height: 0; }
-.die {
-  display: inline-flex;
+.dice-graphics {
+  margin-top: 24px;
+  min-height: 140px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(145deg, #fff, #eef2ff);
+}
+.die {
+  width: 78px;
+  height: 78px;
+  background: linear-gradient(145deg, #ffffff, #eef2ff);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  font-size: 1.8rem;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 12px;
+  gap: 2px;
+}
+.die-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pip {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent-ink);
+}
+/* Faces > 6 fall back to a centered number. */
+.die.die-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--accent-ink);
-  box-shadow: var(--shadow);
+}
+.die.rolling {
+  animation: tumble 0.9s ease-out;
+}
+@keyframes tumble {
+  0%   { transform: translateY(0) rotate(0deg) scale(1); }
+  15%  { transform: translateY(-42px) rotate(140deg) scale(1.05); }
+  35%  { transform: translateY(0) rotate(280deg) scale(1); }
+  50%  { transform: translateY(-26px) rotate(430deg) scale(1.03); }
+  70%  { transform: translateY(0) rotate(560deg) scale(1); }
+  85%  { transform: translateY(-10px) rotate(660deg) scale(1.01); }
+  100% { transform: translateY(0) rotate(720deg) scale(1); }
 }
 
 .result-line { margin-top: 14px; min-height: 1.4em; }

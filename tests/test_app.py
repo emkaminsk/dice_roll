@@ -55,23 +55,33 @@ def page(server):
     assert not errors, f"Console/page errors: {errors}"
 
 
+import re
+
+
+def _rolled_value(page):
+    """Wait for the roll animation to finish and return the rolled number."""
+    page.wait_for_function(
+        "() => document.querySelector('#result').textContent.includes('rolled')",
+        timeout=4000,
+    )
+    text = page.text_content("#result")
+    return int(re.search(r"rolled\s+(\d+)", text).group(1))
+
+
 def test_dice_roll_in_range(page):
     """Rolling a 20-sided die yields a result in [1, 20] (FR-005, US-001)."""
     page.fill("#max", "20")
     page.click("form[name='Dice'] button[type=submit]")
-    page.wait_for_selector(".die")
-    value = int(page.text_content(".die"))
-    assert 1 <= value <= 20
-    assert "rolled" in page.text_content("#result").lower()
+    assert 1 <= _rolled_value(page) <= 20
 
 
 def test_dice_invalid_input_falls_back_to_default(page):
     """A blank/invalid side count falls back to the default of 6 (US-002)."""
     page.fill("#max", "0")
     page.click("form[name='Dice'] button[type=submit]")
-    page.wait_for_selector(".die")
+    value = _rolled_value(page)
     assert page.input_value("#max") == "6"
-    assert 1 <= int(page.text_content(".die")) <= 6
+    assert 1 <= value <= 6
 
 
 def test_picker_draws_only_entered_options(page):
