@@ -62,13 +62,23 @@
     drawBtn.className = 'btn btn-primary btn-sm';
     drawBtn.textContent = 'Draw';
 
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'btn btn-outline-secondary btn-sm';
+    clearBtn.textContent = 'Clear result';
+
     actions.appendChild(addFieldBtn);
     actions.appendChild(drawBtn);
+    actions.appendChild(clearBtn);
     section.appendChild(actions);
 
     const resultEl = document.createElement('p');
     resultEl.className = 'result-line';
     section.appendChild(resultEl);
+
+    clearBtn.addEventListener('click', () => {
+      resultEl.innerHTML = '';
+    });
 
     drawBtn.addEventListener('click', () => {
       const values = Array.from(fields.querySelectorAll('.option-field'))

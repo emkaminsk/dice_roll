@@ -94,6 +94,19 @@ def test_picker_draws_only_entered_options(page):
     assert "Pizza" in result or "Sushi" in result
 
 
+def test_picker_clear_result(page):
+    """Clear result removes the picked text without touching the options."""
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+    page.get_by_role("button", name="Draw").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+    page.get_by_role("button", name="Clear result").first.click()
+    assert page.text_content(".picker-section .result-line").strip() == ""
+    # Options remain intact.
+    assert fields.nth(0).input_value() == "Pizza"
+
+
 def test_picker_empty_shows_guidance(page):
     """Drawing with no options shows guidance, not a crash (FR-010, US-006)."""
     page.locator(".picker-section .btn-primary").first.click()
