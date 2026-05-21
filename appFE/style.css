@@ -219,3 +219,48 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   font-size: 0.85rem;
   margin-top: 40px;
 }
+
+/* Home link (matches 2048 subpage) */
+body > .home-link {
+    position: fixed !important;
+    top: 2rem !important;
+    left: 2rem !important;
+    z-index: 1000 !important;
+}
+
+body > .home-link > a {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 3rem !important;
+    height: 3rem !important;
+    background-color: #fff !important;
+    border-radius: 50% !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1) !important;
+    transition: all 0.3s ease !important;
+    color: #776e65 !important;
+    text-decoration: none !important;
+    font-size: 1.5rem !important;
+}
+
+.home-link a:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    color: #8f7a66;
+}
+
+@media (max-width: 768px) {
+    .home-link {
+        top: 1rem;
+        left: 1rem;
+    }
+
+    .home-link a {
+        width: 2.5rem;
+        height: 2.5rem;
+    }
+
+    .home-link i {
+        font-size: 1.2rem;
+    }
+}
