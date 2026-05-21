@@ -136,6 +136,6 @@ def test_wheel_spin_announces_winner(page):
 
 def test_wheel_requires_two_names(page):
     """With fewer than two names the Spin control is disabled (FR-021, US-014)."""
-    # Remove one of the two default names, leaving a single name.
-    page.locator("#wheel-names .btn-remove").first.click()
+    # Reduce the textarea to a single name.
+    page.fill("#wheel-names", "Alice")
     assert page.is_disabled("#wheel-spin")
