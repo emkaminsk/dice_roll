@@ -22,4 +22,4 @@ jobs:
             set -e
             cd ~/gitrepos/dice_roll/
             git pull origin master
-            sudo rsync -av --delete /home/marcin/gitrepos/dice_roll/appFE/ /var/www/diceroll
+            rsync -av --delete /home/marcin/gitrepos/dice_roll/appFE/ /var/www/diceroll
