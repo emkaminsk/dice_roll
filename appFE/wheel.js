@@ -2,8 +2,7 @@
 (function () {
   const canvas = document.querySelector('#wheel-canvas');
   const ctx = canvas.getContext('2d');
-  const nameList = document.querySelector('#wheel-names');
-  const addNameBtn = document.querySelector('#wheel-add');
+  const namesInput = document.querySelector('#wheel-names');
   const spinBtn = document.querySelector('#wheel-spin');
   const resultEl = document.querySelector('#wheel-result');
 
@@ -21,35 +20,10 @@
   let spinning = false;
 
   function names() {
-    return Array.from(nameList.querySelectorAll('.wheel-name'))
-      .map((el) => el.value.trim())
+    return namesInput.value
+      .split('\n')
+      .map((v) => v.trim())
       .filter((v) => v !== '');
-  }
-
-  function addNameRow(value) {
-    const row = document.createElement('div');
-    row.className = 'name-row';
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'form-control wheel-name';
-    input.placeholder = 'Name';
-    if (value) input.value = value;
-    input.addEventListener('input', draw);
-
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'btn btn-link btn-remove';
-    remove.setAttribute('aria-label', 'Remove name');
-    remove.textContent = '×';
-    remove.addEventListener('click', () => {
-      row.remove();
-      draw();
-    });
-
-    row.appendChild(input);
-    row.appendChild(remove);
-    nameList.appendChild(row);
   }
 
   function draw() {
@@ -81,7 +55,7 @@
         ctx.translate(CENTER, CENTER);
         ctx.rotate(start + seg / 2);
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px system-ui, sans-serif';
+        ctx.font = 'bold 28px system-ui, sans-serif';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
         const label = name.length > 14 ? name.slice(0, 13) + '…' : name;
@@ -158,9 +132,8 @@
 
   canvas.width = SIZE;
   canvas.height = SIZE;
-  addNameRow('Alice');
-  addNameRow('Bob');
-  addNameBtn.addEventListener('click', () => addNameRow());
+  namesInput.value = 'Alice\nBob';
+  namesInput.addEventListener('input', draw);
   spinBtn.addEventListener('click', spin);
   draw();
 })();

@@ -41,9 +41,10 @@
             <div class="wheel-pointer" aria-hidden="true"></div>
             <canvas id="wheel-canvas" role="img" aria-label="Wheel of names"></canvas>
           </div>
-          <div id="wheel-names" class="name-list"></div>
+          <textarea id="wheel-names" class="form-control wheel-names" rows="4"
+            placeholder="One name per line"
+            aria-label="Wheel names, one per line"></textarea>
           <div class="btn-row">
-            <button type="button" id="wheel-add" class="btn btn-outline-secondary btn-sm">Add name</button>
             <button type="button" id="wheel-spin" class="btn btn-primary btn-sm">Spin</button>
           </div>
           <p id="wheel-result" class="result-line"></p>
