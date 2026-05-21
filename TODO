@@ -1,2 +1,3 @@
-- rewrite README to contain instructions how to build the images from the source
-- replace git clone with curl
+- add backlink to home page mkhome.byst.re (home icon identical as in 2048 game)
+- automate the github workflow to rsync files to /var/www/diceroll automatically on push
+- move the buttons so that they dont jump when option is added
