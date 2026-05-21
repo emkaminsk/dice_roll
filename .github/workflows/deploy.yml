@@ -1,0 +1,25 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH (pull + rsync)
+        uses: appleboy/ssh-action@v1.2.4
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: 10114
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/gitrepos/dice_roll/
+            git pull origin master
+            sudo rsync -av --delete /home/marcin/gitrepos/dice_roll/appFE/ /var/www/diceroll
