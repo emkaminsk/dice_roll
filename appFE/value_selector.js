@@ -44,7 +44,6 @@
     fields.className = 'option-fields';
     fields.appendChild(makeField(1));
     fields.appendChild(makeField(2));
-    section.appendChild(fields);
 
     const actions = document.createElement('div');
     actions.className = 'btn-row';
@@ -71,6 +70,7 @@
     actions.appendChild(drawBtn);
     actions.appendChild(clearBtn);
     section.appendChild(actions);
+    section.appendChild(fields);
 
     const resultEl = document.createElement('p');
     resultEl.className = 'result-line';
