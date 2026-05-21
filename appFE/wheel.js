@@ -16,6 +16,45 @@
   const CENTER = SIZE / 2;
   const RADIUS = CENTER - 8;
 
+  // Label sizing. Each label starts at LABEL_BASE_PX and shrinks (per entry,
+  // independently) toward LABEL_MIN_PX when it doesn't fit its segment.
+  const LABEL_BASE_PX = 28;
+  const LABEL_MIN_PX = 12;
+  const HUB_RADIUS = 18;
+  const LABEL_PAD = 6;        // gap kept between text and hub
+  const LABEL_ANCHOR = 14;    // right-align offset from the rim
+  const ANGLE_FILL = 0.8;     // fraction of a wedge's height a label may use
+
+  function setLabelFont(size) {
+    ctx.font = 'bold ' + size + 'px system-ui, sans-serif';
+  }
+
+  // Choose a font size for `text` that fits within `maxWidth` (radial length)
+  // and `maxHeight` (the wedge's angular thickness). Returns the chosen size;
+  // leaves ctx.font set to it.
+  function fitLabelFont(text, maxWidth, maxHeight) {
+    let size = Math.min(LABEL_BASE_PX, maxHeight);
+    setLabelFont(size);
+    const w = ctx.measureText(text).width;
+    if (w > maxWidth) {
+      size = Math.max(LABEL_MIN_PX, Math.floor(size * (maxWidth / w)));
+      size = Math.min(size, maxHeight); // never exceed the angular clamp
+      setLabelFont(size);
+    }
+    return size;
+  }
+
+  // Trim with an ellipsis only when the text still overflows at its smallest
+  // allowed font — a last resort after shrinking.
+  function ellipsize(text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let s = text;
+    while (s.length > 1 && ctx.measureText(s + '…').width > maxWidth) {
+      s = s.slice(0, -1);
+    }
+    return s + '…';
+  }
+
   let angle = 0;          // current rotation, radians
   let spinning = false;
 
@@ -50,23 +89,29 @@
         ctx.fillStyle = PALETTE[i % PALETTE.length];
         ctx.fill();
 
-        // Label
+        // Label — auto-fit this entry's font to its own segment.
         ctx.save();
         ctx.translate(CENTER, CENTER);
         ctx.rotate(start + seg / 2);
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 28px system-ui, sans-serif';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
-        const label = name.length > 14 ? name.slice(0, 13) + '…' : name;
-        ctx.fillText(label, RADIUS - 14, 0);
+
+        const maxWidth = (RADIUS - LABEL_ANCHOR) - HUB_RADIUS - LABEL_PAD;
+        // Wedge thickness (chord) at the text band's mid radius, padded.
+        const midRadius = (HUB_RADIUS + LABEL_PAD + (RADIUS - LABEL_ANCHOR)) / 2;
+        const maxHeight = ANGLE_FILL * 2 * midRadius * Math.sin(seg / 2);
+
+        fitLabelFont(name, maxWidth, maxHeight);
+        const label = ellipsize(name, maxWidth);
+        ctx.fillText(label, RADIUS - LABEL_ANCHOR, 0);
         ctx.restore();
       });
     }
 
     // Hub
     ctx.beginPath();
-    ctx.arc(CENTER, CENTER, 18, 0, Math.PI * 2);
+    ctx.arc(CENTER, CENTER, HUB_RADIUS, 0, Math.PI * 2);
     ctx.fillStyle = '#fff';
     ctx.fill();
     ctx.strokeStyle = '#cbd5e1';
