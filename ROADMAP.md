@@ -8,6 +8,21 @@ Order within a tier is the suggested build order. Check items off as they ship.
 
 ## Tier 1 — quick wins (small, reuse existing patterns)
 
+- [ ] **Fortune wheel — celebration upgrades** — make the existing wheel a delightful
+  daily "who leads standup?" picker. Three parts:
+  - **Remember the names.** Persist the textarea's list to `localStorage` and restore it
+    on load, so the team roster survives reloads. Optional convenience only — the wheel
+    must still work fully with storage unavailable/disabled (private mode, cleared
+    cache); never block a spin on it.
+  - **Winner celebration.** On selection, announce the winner big — a full-screen /
+    across-the-screen overlay with the picked name (large, centered, animated in), not
+    just the small `#wheel-result` line. Dismissable (click/tap or auto-fade) and it
+    must not disturb the other tools or the wheel's own repeat-spin flow.
+  - **Confetti.** Fire a prominent confetti burst the moment the wheel lands on the
+    winner, in sync with the announcement. Pure canvas/DOM, no external libraries or
+    assets; `Math.random()` is fine here (cosmetic jitter only — the winner is already
+    chosen by the fair RNG). Respect `prefers-reduced-motion` (skip/shorten, still show
+    the winner). Route the polish through `ux-polisher`.
 - [ ] **Coin flip** — animated heads/tails flip (CSS 3D or canvas), streak counter for
   the current session. The simplest possible draw; great mobile entry point.
 - [ ] **Magic 8-ball** — ask a question, shake the ball (animation), get one of the 20
