@@ -190,6 +190,72 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
 }
 .wheel-names { resize: vertical; }
 
+/* Winner celebration overlay */
+.celebration-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  cursor: pointer;
+}
+.celebration-overlay.is-visible { opacity: 1; }
+.celebration-confetti {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.celebration-card {
+  position: relative;
+  text-align: center;
+  padding: 24px 16px;
+  transform: scale(0.7);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.18, 0.9, 0.32, 1.4), opacity 0.35s ease;
+}
+.celebration-overlay.is-visible .celebration-card {
+  transform: scale(1);
+  opacity: 1;
+}
+.celebration-label {
+  color: #e0e7ff;
+  font-size: clamp(1rem, 3vw, 1.4rem);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.celebration-name {
+  color: #fff;
+  font-size: clamp(2.4rem, 12vw, 6rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  word-break: break-word;
+  max-width: 90vw;
+}
+.celebration-hint {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.9rem;
+  margin-top: 18px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .celebration-overlay,
+  .celebration-card {
+    transition: opacity 0.15s ease;
+  }
+  .celebration-card { transform: none; }
+  .celebration-overlay.is-visible .celebration-card { transform: none; }
+}
+
 /* Pickers */
 .pickers { margin-top: 28px; }
 .pickers-head {

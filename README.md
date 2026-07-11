@@ -5,7 +5,7 @@ installation, nothing stored — reload the page to start fresh. It bundles thre
 independent tools on a single page:
 
 - **🎲 Dice Roller** — roll a die with any number of sides.
-- **🎡 Wheel of Fortune** — type a list of names and spin an animated wheel to pick a winner.
+- **🎡 Wheel of Fortune** — type a list of names and spin an animated wheel to pick a winner, complete with a full-screen winner announcement and confetti burst. The name list is remembered between reloads (via `localStorage`, when available).
 - **🎯 Random Picker** — enter options and draw one at random; add as many independent picker sections as you like.
 
 All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
@@ -92,9 +92,10 @@ appFE/
   index.html         # single page, three tools
   style.css          # modern-clean custom theme
   random.js          # shared uniform RNG (crypto.getRandomValues)
+  celebration.js     # full-screen winner overlay + confetti (used by the wheel)
   dice_roll.js       # dice roller
   value_selector.js  # add/remove independent picker sections
-  wheel.js           # canvas Wheel of Fortune
+  wheel.js           # canvas Wheel of Fortune (name persistence + celebration)
 tests/
   test_app.py        # Playwright end-to-end tests
 ```

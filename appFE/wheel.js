@@ -58,6 +58,28 @@
   let angle = 0;          // current rotation, radians
   let spinning = false;
 
+  // localStorage persistence — a convenience only. All access is guarded so the
+  // wheel works fully when storage is unavailable/disabled (private mode, etc.).
+  const STORAGE_KEY = 'wheel-names';
+
+  function loadSavedNames() {
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      // Only restore a non-empty saved roster; otherwise keep the seed names.
+      return saved && saved.trim() !== '' ? saved : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveNames() {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, namesInput.value);
+    } catch (e) {
+      /* storage unavailable — ignore, never block the wheel */
+    }
+  }
+
   function names() {
     return namesInput.value
       .split('\n')
@@ -134,6 +156,7 @@
 
     spinning = true;
     resultEl.textContent = '';
+    if (window.Celebration) window.Celebration.hide();
     updateSpinState(list);
 
     const seg = (Math.PI * 2) / list.length;
@@ -164,6 +187,7 @@
         spinning = false;
         updateSpinState(names());
         resultEl.innerHTML = `Winner: <span class="highlight">${escapeHtml(list[winner])}</span>`;
+        if (window.Celebration) window.Celebration.show(list[winner]);
       }
     }
     requestAnimationFrame(frame);
@@ -177,8 +201,12 @@
 
   canvas.width = SIZE;
   canvas.height = SIZE;
-  namesInput.value = 'Alice\nBob';
-  namesInput.addEventListener('input', draw);
+  // Restore a previously saved roster if one exists; otherwise seed with defaults.
+  namesInput.value = loadSavedNames() || 'Alice\nBob';
+  namesInput.addEventListener('input', () => {
+    saveNames();
+    draw();
+  });
   spinBtn.addEventListener('click', spin);
   draw();
 })();

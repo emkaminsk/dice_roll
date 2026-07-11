@@ -139,3 +139,24 @@ def test_wheel_requires_two_names(page):
     # Reduce the textarea to a single name.
     page.fill("#wheel-names", "Alice")
     assert page.is_disabled("#wheel-spin")
+
+
+def test_wheel_spin_shows_celebration_overlay(page):
+    """Landing on a winner shows the full-screen celebration with the name."""
+    page.click("#wheel-spin")
+    page.wait_for_function(
+        "() => { const o = document.querySelector('.celebration-overlay');"
+        " return o && o.classList.contains('is-visible')"
+        " && document.querySelector('.celebration-name').textContent.trim() !== ''; }",
+        timeout=8000,
+    )
+    name = page.text_content(".celebration-name").strip()
+    assert name in ("Alice", "Bob")
+
+
+def test_wheel_names_persist_across_reload(page):
+    """The roster is saved to localStorage and restored after a reload."""
+    page.fill("#wheel-names", "Zoe\nYann\nXavier")
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    assert page.input_value("#wheel-names") == "Zoe\nYann\nXavier"
