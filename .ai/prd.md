@@ -50,8 +50,9 @@ single-purpose tools on one page.
 
 - FR-001: The user can enter the number of sides of the dice via a numeric input,
   with a minimum value of 1 and a default value of 6.
-- FR-002: When the user clicks Roll, the front-end calls the back-end endpoint
-  `GET /dice-roll?max=N`, where N is the entered number of sides.
+- FR-002: When the user clicks Roll, 
+  - the front-end calls the back-end endpoint `GET /dice-roll?max=N`, where N is the entered number of sides.
+  - the front-end presents an animation of rolling dice
 - FR-003: The back-end returns a JSON payload containing the maximum value, the rolled
   value(s), and the total.
 - FR-004: The result is displayed as a dice graphic plus a text message stating the
@@ -69,6 +70,7 @@ single-purpose tools on one page.
   returns it; the front-end displays the chosen value.
 - FR-010: If no values have been entered, the section shows a message indicating no
   drawing has occurred.
+- FR-011: User can use "clear result" button, this keeps options entered but clears the previous result from the screen
 - FR-011 (new): The user can create multiple independent "Randomly choose an option!"
   sections via an "Add section" control, and remove any section via a "Remove section"
   control.
