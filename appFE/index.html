@@ -55,6 +55,22 @@
           </div>
           <p id="wheel-result" class="result-line"></p>
         </section>
+
+        <!-- Coin Flip -->
+        <section class="tool-card" aria-labelledby="coin-title">
+          <h2 id="coin-title">🪙 Flip a coin</h2>
+          <div class="coin-stage">
+            <div id="coin" class="coin" aria-hidden="true">
+              <div class="coin-face coin-heads">H</div>
+              <div class="coin-face coin-tails">T</div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="coin-flip" class="btn btn-primary btn-sm">Flip</button>
+          </div>
+          <p id="coin-result" class="result-line" aria-live="polite"></p>
+          <p id="coin-streak" class="coin-streak muted" aria-live="polite"></p>
+        </section>
       </div>
 
       <!-- Random pickers (one-or-more independent sections) -->
@@ -76,5 +92,6 @@
     <script src="dice_roll.js"></script>
     <script src="value_selector.js"></script>
     <script src="wheel.js"></script>
+    <script src="coin_flip.js"></script>
   </body>
 </html>

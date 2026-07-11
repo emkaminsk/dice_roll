@@ -160,3 +160,58 @@ def test_wheel_names_persist_across_reload(page):
     page.reload()
     page.wait_for_load_state("networkidle")
     assert page.input_value("#wheel-names") == "Zoe\nYann\nXavier"
+
+
+def _flip_coin(page):
+    """Click Flip, wait for the settled result, and return 'Heads' or 'Tails'."""
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    text = page.text_content("#coin-result")
+    return "Heads" if "Heads" in text else "Tails"
+
+
+def test_coin_flip_produces_heads_or_tails(page):
+    """A flip settles on exactly one of Heads or Tails (fair randomIndex(2))."""
+    assert _flip_coin(page) in ("Heads", "Tails")
+
+
+def test_coin_streak_counts_runs(page):
+    """The streak line reports a sensible run length and total across flips."""
+    counts = {"Heads": 0, "Tails": 0}
+    run = 0
+    prev = None
+    for _ in range(6):
+        face = _flip_coin(page)
+        counts[face] += 1
+        run = run + 1 if face == prev else 1
+        prev = face
+        streak = page.text_content("#coin-streak")
+        # The streak line names the current face and its run length.
+        assert f"{run} {face}" in streak
+    total = counts["Heads"] + counts["Tails"]
+    assert f"{total} flips this session" in page.text_content("#coin-streak")
+
+
+def test_coin_flip_does_not_disturb_other_tools(page):
+    """Flipping the coin leaves dice, wheel, and picker independent (US independence)."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _flip_coin(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a flip.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""

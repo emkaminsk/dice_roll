@@ -1,11 +1,12 @@
 # Dice Roll & Random Picker
 
 A lightweight, browser-based collection of fair random-selection tools. No login, no
-installation, nothing stored — reload the page to start fresh. It bundles three
+installation, nothing stored — reload the page to start fresh. It bundles four
 independent tools on a single page:
 
 - **🎲 Dice Roller** — roll a die with any number of sides.
 - **🎡 Wheel of Fortune** — type a list of names and spin an animated wheel to pick a winner, complete with a full-screen winner announcement and confetti burst. The name list is remembered between reloads (via `localStorage`, when available).
+- **🪙 Coin Flip** — flip a coin with an animated 3D toss (heads/tails), plus a session streak counter that tracks the current run and total flips.
 - **🎯 Random Picker** — enter options and draw one at random; add as many independent picker sections as you like.
 
 All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
@@ -89,13 +90,14 @@ server-side code. See [`.ai/tech-stack.md`](.ai/tech-stack.md) for the rationale
 
 ```
 appFE/
-  index.html         # single page, three tools
+  index.html         # single page, four tools
   style.css          # modern-clean custom theme
   random.js          # shared uniform RNG (crypto.getRandomValues)
   celebration.js     # full-screen winner overlay + confetti (used by the wheel)
   dice_roll.js       # dice roller
   value_selector.js  # add/remove independent picker sections
   wheel.js           # canvas Wheel of Fortune (name persistence + celebration)
+  coin_flip.js       # animated 3D coin flip with a session streak counter
 tests/
   test_app.py        # Playwright end-to-end tests
 ```
