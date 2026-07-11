@@ -32,6 +32,9 @@ def server():
     handler = lambda *a, **kw: http.server.SimpleHTTPRequestHandler(
         *a, directory=str(FE_DIR), **kw
     )
+    # Reuse the address so a rapid re-run doesn't hit a TIME_WAIT socket from the
+    # previous run (Errno 98) — common in local/CI back-to-back runs.
+    socketserver.TCPServer.allow_reuse_address = True
     httpd = socketserver.TCPServer(("127.0.0.1", PORT), handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -81,6 +84,41 @@ def test_dice_invalid_input_falls_back_to_default(page):
     page.click("form[name='Dice'] button[type=submit]")
     value = _rolled_value(page)
     assert page.input_value("#max") == "6"
+    assert 1 <= value <= 6
+
+
+def test_dice_multiple_dice_shows_breakdown_and_total(page):
+    """Rolling 3d6 shows a per-die breakdown and a total in [3, 18] (Multiple dice)."""
+    page.fill("#max", "6")
+    page.fill("#dice-count", "3")
+    page.click("form[name='Dice'] button[type=submit]")
+    page.wait_for_function(
+        "() => document.querySelector('#result').textContent.includes('=')",
+        timeout=4000,
+    )
+    text = page.text_content("#result")
+    # "You rolled a + b + c = total on three 6-sided dice."
+    breakdown, total_part = text.split("=")
+    dice = [int(n) for n in re.findall(r"\d+", breakdown)]
+    assert len(dice) == 3
+    assert all(1 <= d <= 6 for d in dice)
+    total = int(page.text_content("#result .highlight"))
+    assert total == sum(dice)
+    assert 3 <= total <= 18
+    assert "three 6-sided dice" in text
+
+
+def test_dice_count_invalid_falls_back_to_one(page):
+    """A blank/invalid dice count falls back to a single die with original phrasing."""
+    page.fill("#max", "6")
+    page.fill("#dice-count", "0")
+    page.click("form[name='Dice'] button[type=submit]")
+    value = _rolled_value(page)
+    assert page.input_value("#dice-count") == "1"
+    # Single-die phrasing is preserved: no total/breakdown, reads "on a 6-sided die".
+    text = page.text_content("#result")
+    assert "6-sided die." in text
+    assert "=" not in text
     assert 1 <= value <= 6
 
 
@@ -139,3 +177,142 @@ def test_wheel_requires_two_names(page):
     # Reduce the textarea to a single name.
     page.fill("#wheel-names", "Alice")
     assert page.is_disabled("#wheel-spin")
+
+
+def test_wheel_spin_shows_celebration_overlay(page):
+    """Landing on a winner shows the full-screen celebration with the name."""
+    page.click("#wheel-spin")
+    page.wait_for_function(
+        "() => { const o = document.querySelector('.celebration-overlay');"
+        " return o && o.classList.contains('is-visible')"
+        " && document.querySelector('.celebration-name').textContent.trim() !== ''; }",
+        timeout=8000,
+    )
+    name = page.text_content(".celebration-name").strip()
+    assert name in ("Alice", "Bob")
+
+
+def test_wheel_names_persist_across_reload(page):
+    """The roster is saved to localStorage and restored after a reload."""
+    page.fill("#wheel-names", "Zoe\nYann\nXavier")
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    assert page.input_value("#wheel-names") == "Zoe\nYann\nXavier"
+
+
+def _flip_coin(page):
+    """Click Flip, wait for the settled result, and return 'Heads' or 'Tails'."""
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    text = page.text_content("#coin-result")
+    return "Heads" if "Heads" in text else "Tails"
+
+
+def test_coin_flip_produces_heads_or_tails(page):
+    """A flip settles on exactly one of Heads or Tails (fair randomIndex(2))."""
+    assert _flip_coin(page) in ("Heads", "Tails")
+
+
+def test_coin_streak_counts_runs(page):
+    """The streak line reports a sensible run length and total across flips."""
+    counts = {"Heads": 0, "Tails": 0}
+    run = 0
+    prev = None
+    for _ in range(6):
+        face = _flip_coin(page)
+        counts[face] += 1
+        run = run + 1 if face == prev else 1
+        prev = face
+        streak = page.text_content("#coin-streak")
+        # The streak line names the current face and its run length.
+        assert f"{run} {face}" in streak
+    total = counts["Heads"] + counts["Tails"]
+    assert f"{total} flips this session" in page.text_content("#coin-streak")
+
+
+def test_coin_flip_does_not_disturb_other_tools(page):
+    """Flipping the coin leaves dice, wheel, and picker independent (US independence)."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _flip_coin(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a flip.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
+def _ask_eightball(page, question="Will this test pass?"):
+    """Ask the 8-ball and return the revealed answer text from the result line."""
+    page.fill("#eightball-question", question)
+    page.click("#eightball-ask")
+    page.wait_for_function(
+        "() => document.querySelector('#eightball-result')"
+        ".textContent.includes('The ball says')",
+        timeout=4000,
+    )
+    text = page.text_content("#eightball-result")
+    return text.split("The ball says:", 1)[1].strip()
+
+
+def test_eightball_reveals_a_classic_answer(page):
+    """Asking reveals one of the 20 canonical answers (fair randomIndex)."""
+    answer = _ask_eightball(page)
+    answers = page.evaluate("() => EIGHTBALL_ANSWERS")
+    assert len(answers) == 20
+    assert answer in answers
+    # The same answer is mirrored in the ball's triangle window.
+    assert page.text_content("#eightball-answer").strip() == answer
+
+
+def test_eightball_empty_question_shows_nudge_not_crash(page):
+    """Asking with a blank question still reveals an answer (with a gentle nudge)."""
+    page.click("#eightball-ask")
+    page.wait_for_function(
+        "() => document.querySelector('#eightball-result')"
+        ".textContent.includes('The ball says')",
+        timeout=4000,
+    )
+    answers = page.evaluate("() => EIGHTBALL_ANSWERS")
+    answer = page.text_content("#eightball-answer").strip()
+    assert answer in answers
+
+
+def test_eightball_does_not_disturb_other_tools(page):
+    """Asking the 8-ball leaves dice, wheel, coin, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _ask_eightball(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after an ask.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""

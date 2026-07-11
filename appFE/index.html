@@ -9,8 +9,8 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest">
     <link rel="stylesheet" href="all.min.css">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="vendor/bootstrap.min.css">
+    <link rel="stylesheet" href="vendor/inter.css">
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
@@ -34,6 +34,10 @@
               <label for="max">Number of sides</label>
               <input type="number" id="max" name="max" min="1" value="6" class="form-control narrow-input">
             </div>
+            <div class="form-group">
+              <label for="dice-count">Number of dice</label>
+              <input type="number" id="dice-count" name="count" min="1" value="1" class="form-control narrow-input">
+            </div>
             <button type="submit" class="btn btn-primary">Roll</button>
             <div id="dice-graphics" class="dice-graphics"></div>
             <p id="result" class="result-line"></p>
@@ -55,6 +59,47 @@
           </div>
           <p id="wheel-result" class="result-line"></p>
         </section>
+
+        <!-- Coin Flip -->
+        <section class="tool-card" aria-labelledby="coin-title">
+          <h2 id="coin-title">🪙 Flip a coin</h2>
+          <div class="coin-stage">
+            <div id="coin" class="coin" aria-hidden="true">
+              <div class="coin-face coin-heads">H</div>
+              <div class="coin-face coin-tails">T</div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="coin-flip" class="btn btn-primary btn-sm">Flip</button>
+          </div>
+          <p id="coin-result" class="result-line" aria-live="polite"></p>
+          <p id="coin-streak" class="coin-streak muted" aria-live="polite"></p>
+        </section>
+
+        <!-- Magic 8-Ball -->
+        <section class="tool-card" aria-labelledby="eightball-title">
+          <h2 id="eightball-title">🎱 Magic 8-Ball</h2>
+          <div class="eightball-stage">
+            <div id="eightball" class="eightball" aria-hidden="true">
+              <div class="eightball-window">
+                <span id="eightball-answer" class="eightball-answer"></span>
+              </div>
+            </div>
+          </div>
+          <form id="eightball-form" novalidate>
+            <div class="form-group">
+              <label for="eightball-question">Your yes/no question</label>
+              <input type="text" id="eightball-question" name="question"
+                class="form-control" placeholder="Will today be a good day?"
+                autocomplete="off">
+            </div>
+            <div class="btn-row">
+              <button type="submit" id="eightball-ask" class="btn btn-primary btn-sm">Ask</button>
+            </div>
+          </form>
+          <p id="eightball-result" class="result-line" aria-live="polite"></p>
+          <p class="eightball-note muted">For entertainment only.</p>
+        </section>
       </div>
 
       <!-- Random pickers (one-or-more independent sections) -->
@@ -72,8 +117,12 @@
     </footer>
 
     <script src="random.js"></script>
+    <script src="celebration.js"></script>
     <script src="dice_roll.js"></script>
     <script src="value_selector.js"></script>
     <script src="wheel.js"></script>
+    <script src="coin_flip.js"></script>
+    <script src="data/eightball.js"></script>
+    <script src="eight_ball.js"></script>
   </body>
 </html>
