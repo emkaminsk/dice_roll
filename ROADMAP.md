@@ -8,7 +8,7 @@ Order within a tier is the suggested build order. Check items off as they ship.
 
 ## Tier 1 — quick wins (small, reuse existing patterns)
 
-- [ ] **Fortune wheel — celebration upgrades** — make the existing wheel a delightful
+- [x] **Fortune wheel — celebration upgrades** — make the existing wheel a delightful
   daily "who leads standup?" picker. Three parts:
   - **Remember the names.** Persist the textarea's list to `localStorage` and restore it
     on load, so the team roster survives reloads. Optional convenience only — the wheel
@@ -23,12 +23,12 @@ Order within a tier is the suggested build order. Check items off as they ship.
     assets; `Math.random()` is fine here (cosmetic jitter only — the winner is already
     chosen by the fair RNG). Respect `prefers-reduced-motion` (skip/shorten, still show
     the winner). Route the polish through `ux-polisher`.
-- [ ] **Coin flip** — animated heads/tails flip (CSS 3D or canvas), streak counter for
+- [x] **Coin flip** — animated heads/tails flip (CSS 3D or canvas), streak counter for
   the current session. The simplest possible draw; great mobile entry point.
-- [ ] **Magic 8-ball** — ask a question, shake the ball (animation), get one of the 20
+- [x] **Magic 8-ball** — ask a question, shake the ball (animation), get one of the 20
   classic answers. First content-driven tool; establishes the pattern of a JS data file
   (`appFE/data/eightball.js`).
-- [ ] **Multiple dice** — extend the dice roller: roll N dice at once (e.g. 3d6), show
+- [x] **Multiple dice** — extend the dice roller: roll N dice at once (e.g. 3d6), show
   each die plus the total. Keep the existing single-die UX as the default.
 
 ## Tier 2 — drawing lots, richer interactions
