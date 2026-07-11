@@ -32,6 +32,9 @@ def server():
     handler = lambda *a, **kw: http.server.SimpleHTTPRequestHandler(
         *a, directory=str(FE_DIR), **kw
     )
+    # Reuse the address so a rapid re-run doesn't hit a TIME_WAIT socket from the
+    # previous run (Errno 98) — common in local/CI back-to-back runs.
+    socketserver.TCPServer.allow_reuse_address = True
     httpd = socketserver.TCPServer(("127.0.0.1", PORT), handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -213,5 +216,68 @@ def test_coin_flip_does_not_disturb_other_tools(page):
     # ...and they still work after a flip.
     page.click("form[name='Dice'] button[type=submit]")
     assert 1 <= _rolled_value(page) <= 20
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
+def _ask_eightball(page, question="Will this test pass?"):
+    """Ask the 8-ball and return the revealed answer text from the result line."""
+    page.fill("#eightball-question", question)
+    page.click("#eightball-ask")
+    page.wait_for_function(
+        "() => document.querySelector('#eightball-result')"
+        ".textContent.includes('The ball says')",
+        timeout=4000,
+    )
+    text = page.text_content("#eightball-result")
+    return text.split("The ball says:", 1)[1].strip()
+
+
+def test_eightball_reveals_a_classic_answer(page):
+    """Asking reveals one of the 20 canonical answers (fair randomIndex)."""
+    answer = _ask_eightball(page)
+    answers = page.evaluate("() => EIGHTBALL_ANSWERS")
+    assert len(answers) == 20
+    assert answer in answers
+    # The same answer is mirrored in the ball's triangle window.
+    assert page.text_content("#eightball-answer").strip() == answer
+
+
+def test_eightball_empty_question_shows_nudge_not_crash(page):
+    """Asking with a blank question still reveals an answer (with a gentle nudge)."""
+    page.click("#eightball-ask")
+    page.wait_for_function(
+        "() => document.querySelector('#eightball-result')"
+        ".textContent.includes('The ball says')",
+        timeout=4000,
+    )
+    answers = page.evaluate("() => EIGHTBALL_ANSWERS")
+    answer = page.text_content("#eightball-answer").strip()
+    assert answer in answers
+
+
+def test_eightball_does_not_disturb_other_tools(page):
+    """Asking the 8-ball leaves dice, wheel, coin, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _ask_eightball(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after an ask.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
     page.locator(".picker-section .btn-primary").first.click()
     assert page.text_content(".picker-section .result-line").strip() != ""

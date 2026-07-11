@@ -71,6 +71,31 @@
           <p id="coin-result" class="result-line" aria-live="polite"></p>
           <p id="coin-streak" class="coin-streak muted" aria-live="polite"></p>
         </section>
+
+        <!-- Magic 8-Ball -->
+        <section class="tool-card" aria-labelledby="eightball-title">
+          <h2 id="eightball-title">🎱 Magic 8-Ball</h2>
+          <div class="eightball-stage">
+            <div id="eightball" class="eightball" aria-hidden="true">
+              <div class="eightball-window">
+                <span id="eightball-answer" class="eightball-answer"></span>
+              </div>
+            </div>
+          </div>
+          <form id="eightball-form" novalidate>
+            <div class="form-group">
+              <label for="eightball-question">Your yes/no question</label>
+              <input type="text" id="eightball-question" name="question"
+                class="form-control" placeholder="Will today be a good day?"
+                autocomplete="off">
+            </div>
+            <div class="btn-row">
+              <button type="submit" id="eightball-ask" class="btn btn-primary btn-sm">Ask</button>
+            </div>
+          </form>
+          <p id="eightball-result" class="result-line" aria-live="polite"></p>
+          <p class="eightball-note muted">For entertainment only.</p>
+        </section>
       </div>
 
       <!-- Random pickers (one-or-more independent sections) -->
@@ -93,5 +118,7 @@
     <script src="value_selector.js"></script>
     <script src="wheel.js"></script>
     <script src="coin_flip.js"></script>
+    <script src="data/eightball.js"></script>
+    <script src="eight_ball.js"></script>
   </body>
 </html>
