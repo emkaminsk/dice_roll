@@ -87,6 +87,41 @@ def test_dice_invalid_input_falls_back_to_default(page):
     assert 1 <= value <= 6
 
 
+def test_dice_multiple_dice_shows_breakdown_and_total(page):
+    """Rolling 3d6 shows a per-die breakdown and a total in [3, 18] (Multiple dice)."""
+    page.fill("#max", "6")
+    page.fill("#dice-count", "3")
+    page.click("form[name='Dice'] button[type=submit]")
+    page.wait_for_function(
+        "() => document.querySelector('#result').textContent.includes('=')",
+        timeout=4000,
+    )
+    text = page.text_content("#result")
+    # "You rolled a + b + c = total on three 6-sided dice."
+    breakdown, total_part = text.split("=")
+    dice = [int(n) for n in re.findall(r"\d+", breakdown)]
+    assert len(dice) == 3
+    assert all(1 <= d <= 6 for d in dice)
+    total = int(page.text_content("#result .highlight"))
+    assert total == sum(dice)
+    assert 3 <= total <= 18
+    assert "three 6-sided dice" in text
+
+
+def test_dice_count_invalid_falls_back_to_one(page):
+    """A blank/invalid dice count falls back to a single die with original phrasing."""
+    page.fill("#max", "6")
+    page.fill("#dice-count", "0")
+    page.click("form[name='Dice'] button[type=submit]")
+    value = _rolled_value(page)
+    assert page.input_value("#dice-count") == "1"
+    # Single-die phrasing is preserved: no total/breakdown, reads "on a 6-sided die".
+    text = page.text_content("#result")
+    assert "6-sided die." in text
+    assert "=" not in text
+    assert 1 <= value <= 6
+
+
 def test_picker_draws_only_entered_options(page):
     """Draw returns one of the non-empty options (FR-009, US-005)."""
     fields = page.locator(".picker-section .option-field")

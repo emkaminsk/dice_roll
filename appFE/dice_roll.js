@@ -3,9 +3,30 @@
 (function () {
   const form = document.querySelector('form[name="Dice"]');
   const maxInput = document.querySelector('#max');
+  const countInput = document.querySelector('#dice-count');
   const diceGraphics = document.querySelector('#dice-graphics');
   const result = document.querySelector('#result');
   const button = form.querySelector('button[type=submit]');
+
+  // Spelled-out counts for the multi-die phrasing; falls back to the numeral.
+  const NUMBER_WORDS = [
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+    'nine', 'ten',
+  ];
+  function numberWord(n) {
+    return NUMBER_WORDS[n] || String(n);
+  }
+
+  // Result phrasing: single die keeps the exact original wording (US-002 tests
+  // rely on it); 2+ dice show the per-die breakdown plus the total.
+  function resultHtml(rolls, sides) {
+    if (rolls.length === 1) {
+      return `You rolled <span class="highlight">${rolls[0]}</span> on a ${sides}-sided die.`;
+    }
+    const total = rolls.reduce((a, b) => a + b, 0);
+    return `You rolled ${rolls.join(' + ')} = <span class="highlight">${total}</span>`
+      + ` on ${numberWord(rolls.length)} ${sides}-sided dice.`;
+  }
 
   // Pip layout per face value, as indices into a 3x3 grid (0..8):
   //   0 1 2
@@ -55,32 +76,49 @@
       maxInput.value = 6;
     }
 
-    const roll = randomInt(1, sides);
+    // Number of dice; blank/invalid falls back to a single die.
+    let count = parseInt(countInput.value, 10);
+    if (!Number.isFinite(count) || count < 1) {
+      count = 1;
+      countInput.value = 1;
+    }
+
+    // Independent fair draws — one per die.
+    const rolls = [];
+    for (let i = 0; i < count; i++) rolls.push(randomInt(1, sides));
 
     diceGraphics.innerHTML = '';
-    const die = document.createElement('div');
-    die.className = 'die';
-    diceGraphics.appendChild(die);
+    const dice = [];
+    for (let i = 0; i < count; i++) {
+      const die = document.createElement('div');
+      die.className = 'die';
+      diceGraphics.appendChild(die);
+      dice.push(die);
+    }
 
     if (reduceMotion) {
-      renderFace(die, roll);
-      result.innerHTML = `You rolled <span class="highlight">${roll}</span> on a ${sides}-sided die.`;
+      dice.forEach((die, i) => renderFace(die, rolls[i]));
+      result.innerHTML = resultHtml(rolls, sides);
       return;
     }
 
     rolling = true;
     button.disabled = true;
     result.textContent = '';
-    die.classList.add('rolling');
+    dice.forEach((die) => die.classList.add('rolling'));
 
-    // Flicker through random faces while the die tumbles.
-    const flick = setInterval(() => renderFace(die, randomInt(1, 6)), 80);
+    // Flicker through random faces while the dice tumble.
+    const flick = setInterval(() => {
+      dice.forEach((die) => renderFace(die, randomInt(1, 6)));
+    }, 80);
 
     setTimeout(() => {
       clearInterval(flick);
-      die.classList.remove('rolling');
-      renderFace(die, roll);
-      result.innerHTML = `You rolled <span class="highlight">${roll}</span> on a ${sides}-sided die.`;
+      dice.forEach((die, i) => {
+        die.classList.remove('rolling');
+        renderFace(die, rolls[i]);
+      });
+      result.innerHTML = resultHtml(rolls, sides);
       rolling = false;
       button.disabled = false;
     }, 900);

@@ -4,7 +4,8 @@ A lightweight, browser-based collection of fair random-selection tools. No login
 installation, nothing stored — reload the page to start fresh. It bundles five
 independent tools on a single page:
 
-- **🎲 Dice Roller** — roll a die with any number of sides.
+- **🎲 Dice Roller** — roll one or several dice with any number of sides; see each
+  die and the total.
 - **🎡 Wheel of Fortune** — type a list of names and spin an animated wheel to pick a winner, complete with a full-screen winner announcement and confetti burst. The name list is remembered between reloads (via `localStorage`, when available).
 - **🪙 Coin Flip** — flip a coin with an animated 3D toss (heads/tails), plus a session streak counter that tracks the current run and total flips.
 - **🎱 Magic 8-Ball** — ask a yes/no question, shake the ball, and get one of the 20 classic answers revealed in its triangle window. For entertainment only.
