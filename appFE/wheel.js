@@ -56,9 +56,18 @@
     return s + '…';
   }
 
+  const TWO_PI = Math.PI * 2;
   let angle = 0;          // current rotation, radians
   let spinning = false;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Gentle ambient counter-clockwise drift so the wheel is always turning at
+  // rest (an "attract" motion). Purely cosmetic; paused while a real spin runs
+  // and briefly after one lands so the winner stays under the pointer. Disabled
+  // entirely for reduced-motion and while the tab is hidden.
+  const IDLE_SPEED = 0.22;   // radians per second, counter-clockwise
+  let idlePausedUntil = 0;
+  let lastIdle = 0;
 
   // localStorage persistence — a convenience only. All access is guarded so the
   // wheel works fully when storage is unavailable/disabled (private mode, etc.).
@@ -165,12 +174,17 @@
     // Pick the winner uniformly first, independent of visual start (FR-022).
     const winner = randomIndex(list.length);
 
-    // The pointer sits at the top (-PI/2). Compute a target angle so the
-    // winner's segment center lands under the pointer, plus several full turns.
+    // The pointer sits at the top (-PI/2). Resting angle (mod 2π) that puts the
+    // winner's segment center under the pointer.
     const pointer = -Math.PI / 2;
     const segCenter = winner * seg + seg / 2;
-    const turns = 5 + randomIndex(3); // 5-7 full rotations
-    const target = turns * Math.PI * 2 + (pointer - segCenter);
+    const restMod = pointer - segCenter;
+    // Spin counter-clockwise (decreasing angle) at least three full turns, then
+    // land exactly on the fairly-chosen winner. Direction/turns are cosmetic —
+    // the winner is already decided above.
+    const minTurns = 3 + randomIndex(3); // always >= 3 full rotations
+    let target = restMod;
+    while (target > angle - minTurns * TWO_PI) target -= TWO_PI;
 
     if (reduceMotion) {
       // Still land on the same fairly-chosen winner — just skip the tumble.
@@ -201,6 +215,8 @@
       } else {
         spinning = false;
         if (pointerEl) pointerEl.classList.remove('is-spinning');
+        // Hold the winner under the pointer before the idle drift resumes.
+        idlePausedUntil = performance.now() + 2500;
         updateSpinState(names());
         resultEl.innerHTML = `Winner: <span class="highlight">${escapeHtml(list[winner])}</span>`;
         if (window.Celebration) window.Celebration.show(list[winner]);
@@ -225,4 +241,20 @@
   });
   spinBtn.addEventListener('click', spin);
   draw();
+
+  // Ambient counter-clockwise idle drift (attract motion).
+  function idleTick(now) {
+    requestAnimationFrame(idleTick);
+    if (spinning || now < idlePausedUntil || document.hidden) {
+      lastIdle = now;
+      return;
+    }
+    if (!lastIdle) { lastIdle = now; return; }
+    const dt = (now - lastIdle) / 1000;
+    lastIdle = now;
+    angle -= IDLE_SPEED * dt;            // counter-clockwise
+    if (angle <= -TWO_PI) angle += TWO_PI; // keep bounded
+    draw();
+  }
+  if (!reduceMotion) requestAnimationFrame(idleTick);
 })();

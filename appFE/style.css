@@ -378,20 +378,26 @@ select.form-control:focus-visible { outline: none; }
   display: flex;
   justify-content: center;
   margin-bottom: 16px;
-  /* A slight tabletop tilt framing the whole stage (canvas + pointer move as
-     one rigid unit, so they never fall out of alignment with each other) —
-     purely a presentation frame, the canvas's own drawing/coordinates and the
-     fair spin logic in wheel.js are untouched. */
-  transform: perspective(900px) rotateX(4deg);
-  transform-origin: 50% 85%;
+  /* A tabletop tilt framing the whole stage (canvas + pointer move as one rigid
+     unit, so they never fall out of alignment with each other) — purely a
+     presentation frame, the canvas's own drawing/coordinates and the fair spin
+     logic in wheel.js are untouched. */
+  transform: perspective(760px) rotateX(16deg);
+  transform-origin: 50% 72%;
 }
 #wheel-canvas {
   max-width: 100%;
   border-radius: 50%;
+  /* Stacked dark offsets read as the wheel's physical thickness/rim under the
+     tabletop tilt; the soft offset below grounds it with a cast shadow. */
   box-shadow:
-    0 22px 32px -16px rgba(15, 23, 42, 0.4),
-    inset 0 0 0 5px rgba(255, 255, 255, 0.55),
-    inset 0 0 0 7px rgba(15, 23, 42, 0.08);
+    0 5px 0 rgba(79, 70, 229, 0.55),
+    0 10px 0 rgba(67, 56, 202, 0.5),
+    0 15px 0 rgba(55, 48, 163, 0.45),
+    0 20px 0 rgba(49, 46, 129, 0.4),
+    0 40px 34px -12px rgba(15, 23, 42, 0.55),
+    inset 0 0 0 5px rgba(255, 255, 255, 0.6),
+    inset 0 0 0 8px rgba(15, 23, 42, 0.1);
 }
 .wheel-pointer {
   position: absolute;
