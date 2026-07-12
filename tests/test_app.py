@@ -255,6 +255,287 @@ def test_coin_flip_does_not_disturb_other_tools(page):
     assert page.text_content(".picker-section .result-line").strip() != ""
 
 
+def _find_short_straw(page):
+    """Pull straws in order until the short one turns up; return its index."""
+    n = int(page.input_value("#straws-count"))
+    for i in range(n):
+        el = page.locator(f'#straws-bundle .straw[data-index="{i}"]')
+        if el.is_disabled():  # already revealed (e.g. auto-revealed on the loss)
+            continue
+        el.click()
+        if "You drew the short straw" in page.text_content("#straws-result"):
+            return i
+    return None
+
+
+def test_draw_straws_reveals_exactly_one_short(page):
+    """Pulling straws eventually reveals exactly one short straw and ends the round."""
+    short_i = _find_short_straw(page)
+    assert short_i is not None
+    assert "You drew the short straw" in page.text_content("#straws-result")
+    # Exactly one straw is marked short, and the whole bundle is now revealed.
+    assert page.locator("#straws-bundle .is-short").count() == 1
+    n = int(page.input_value("#straws-count"))
+    assert page.locator("#straws-bundle .straw.is-pulled").count() == n
+
+
+def test_draw_straws_count_rerenders(page):
+    """Changing the straw count re-renders exactly that many straws."""
+    page.fill("#straws-count", "7")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#straws-bundle .straw').length === 7"
+    )
+    assert page.locator("#straws-bundle .straw").count() == 7
+
+
+def test_draw_straws_invalid_count_clamps(page):
+    """A below-minimum count clamps to 2 without crashing (guidance, not error)."""
+    page.fill("#straws-count", "0")
+    page.locator("#straws-count").press("Tab")  # blur -> change -> clamp
+    page.wait_for_function(
+        "() => document.querySelectorAll('#straws-bundle .straw').length === 2"
+    )
+    assert page.input_value("#straws-count") == "2"
+
+
+def test_draw_straws_new_round_reshuffles(page):
+    """A finished round resets to a fresh, unrevealed bundle on New round."""
+    _find_short_straw(page)
+    assert page.locator("#straws-bundle .is-short").count() == 1
+    page.click("#straws-new")
+    assert page.locator("#straws-bundle .straw.is-pulled").count() == 0
+    assert "Tap a straw" in page.text_content("#straws-result")
+
+
+def test_draw_straws_does_not_disturb_other_tools(page):
+    """Drawing straws leaves dice, wheel, coin, 8-ball, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _find_short_straw(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a draw.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
+def _split_teams(page):
+    """Click Split and return the list of member-name lists, one per team card."""
+    page.click("#team-split")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#team-results .team-card').length > 0",
+        timeout=4000,
+    )
+    return page.evaluate(
+        "() => Array.from(document.querySelectorAll('#team-results .team-card'))"
+        ".map(c => Array.from(c.querySelectorAll('.team-member')).map(m => m.textContent))"
+    )
+
+
+def test_team_splitter_even_split(page):
+    """6 names into 2 teams gives two 3/3 teams covering all names, no duplicates."""
+    page.fill("#team-names", "Ann\nBob\nCy\nDee\nEli\nFay")
+    page.fill("#team-count", "2")
+    teams = _split_teams(page)
+    assert len(teams) == 2
+    assert sorted(len(t) for t in teams) == [3, 3]
+    members = [m for t in teams for m in t]
+    assert sorted(members) == ["Ann", "Bob", "Cy", "Dee", "Eli", "Fay"]
+    assert len(members) == len(set(members))  # no duplicates
+
+
+def test_team_splitter_uneven_split(page):
+    """5 names into 2 teams gives sizes 3 and 2 (differ by at most one)."""
+    page.fill("#team-names", "Ann\nBob\nCy\nDee\nEli")
+    page.fill("#team-count", "2")
+    teams = _split_teams(page)
+    assert sorted(len(t) for t in teams) == [2, 3]
+    members = sorted(m for t in teams for m in t)
+    assert members == ["Ann", "Bob", "Cy", "Dee", "Eli"]
+
+
+def test_team_splitter_too_many_teams_shows_guidance(page):
+    """More teams than names shows guidance, no crash and no team cards."""
+    page.fill("#team-names", "Ann\nBob")
+    page.fill("#team-count", "5")
+    page.click("#team-split")
+    assert page.locator("#team-results .team-card").count() == 0
+    result = page.text_content("#team-result").lower()
+    assert "add more names" in result or "lower the team count" in result
+
+
+def test_team_splitter_too_few_names_disables_split(page):
+    """With fewer than two names the Split control is disabled (guidance, not crash)."""
+    page.fill("#team-names", "Ann")
+    assert page.is_disabled("#team-split")
+
+
+def test_team_splitter_does_not_disturb_other_tools(page):
+    """Splitting teams leaves dice, wheel, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    page.fill("#team-names", "Ann\nBob\nCy\nDee")
+    _split_teams(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a split.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
+def _draw_lotto(page, k):
+    """Click Draw and wait until all k balls have dropped; return their numbers."""
+    page.click("#lotto-draw")
+    page.wait_for_function(
+        f"() => document.querySelectorAll('#lotto-balls .lotto-ball').length === {k}",
+        timeout=6000,
+    )
+    return page.evaluate(
+        "() => Array.from(document.querySelectorAll('#lotto-balls .lotto-ball'))"
+        ".map(b => parseInt(b.textContent, 10))"
+    )
+
+
+def test_lotto_draws_six_unique_sorted(page):
+    """6 from 49 yields exactly 6 unique numbers in [1, 49], shown ascending."""
+    numbers = _draw_lotto(page, 6)
+    assert len(numbers) == 6
+    assert len(set(numbers)) == 6  # unique
+    assert all(1 <= n <= 49 for n in numbers)
+    assert numbers == sorted(numbers)  # displayed ascending
+
+
+def test_lotto_preset_sets_k_and_n(page):
+    """Selecting a preset fills the How-many and range inputs."""
+    page.select_option("#lotto-preset", "5:50")
+    assert page.input_value("#lotto-k") == "5"
+    assert page.input_value("#lotto-n") == "50"
+    numbers = _draw_lotto(page, 5)
+    assert len(numbers) == 5
+    assert all(1 <= n <= 50 for n in numbers)
+
+
+def test_lotto_k_greater_than_n_shows_guidance(page):
+    """Asking for more numbers than the range holds guides and draws nothing."""
+    page.fill("#lotto-k", "10")
+    page.fill("#lotto-n", "5")
+    page.click("#lotto-draw")
+    assert page.locator("#lotto-balls .lotto-ball").count() == 0
+    assert "Can't draw" in page.text_content("#lotto-result")
+
+
+def test_lotto_does_not_disturb_other_tools(page):
+    """Drawing lucky numbers leaves dice, wheel, coin, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _draw_lotto(page, 6)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a draw.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
+def _crack_cookie(page):
+    """Click Crack open, wait for the slip to reveal, and return (fortune, numbers)."""
+    page.click("#cookie-crack")
+    page.wait_for_function(
+        "() => { const s = document.querySelector('#cookie-slip');"
+        " return s && !s.hidden"
+        " && document.querySelector('#cookie-result').textContent.trim() !== ''"
+        " && document.querySelectorAll('#cookie-numbers .cookie-num').length === 6; }",
+        timeout=4000,
+    )
+    fortune = page.text_content("#cookie-result").strip()
+    numbers = page.evaluate(
+        "() => Array.from(document.querySelectorAll('#cookie-numbers .cookie-num'))"
+        ".map(el => parseInt(el.textContent, 10))"
+    )
+    return fortune, numbers
+
+
+def test_fortune_cookie_reveals_fortune_and_lucky_numbers(page):
+    """Cracking reveals a real FORTUNES entry and 6 unique numbers in [1,69] sorted."""
+    fortune, numbers = _crack_cookie(page)
+    fortunes = page.evaluate("() => FORTUNES")
+    assert fortune in fortunes
+    assert len(numbers) == 6
+    assert len(set(numbers)) == 6  # unique
+    assert all(1 <= n <= 69 for n in numbers)
+    assert numbers == sorted(numbers)  # displayed ascending
+    # Cracking again yields a fresh (still valid) draw.
+    fortune2, numbers2 = _crack_cookie(page)
+    assert fortune2 in fortunes
+    assert len(set(numbers2)) == 6
+    assert all(1 <= n <= 69 for n in numbers2)
+
+
+def test_fortune_cookie_does_not_disturb_other_tools(page):
+    """Cracking a cookie leaves dice, wheel, coin, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _crack_cookie(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a crack.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
 def _ask_eightball(page, question="Will this test pass?"):
     """Ask the 8-ball and return the revealed answer text from the result line."""
     page.fill("#eightball-question", question)

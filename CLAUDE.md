@@ -8,6 +8,13 @@ fortune-telling (horoscope, fortune cookie, magic 8-ball, tarot card of the day)
 The prioritized backlog lives in [`ROADMAP.md`](ROADMAP.md). Product requirements are
 in [`.ai/prd.md`](.ai/prd.md) and the stack rationale in [`.ai/tech-stack.md`](.ai/tech-stack.md).
 
+**Look and feel is a first-class goal — how the page looks and feels is as important
+as what it does.** This is an entertainment page: a tool that works but looks plain is
+only half done. Every feature must land polished — cohesive visuals, satisfying
+animation, a real "reveal" moment, and a delightful experience on a phone — not just
+functionally correct. Treat a `ux-polisher` pass as part of shipping a feature, not an
+optional extra, and hold new tools to the visual craft of the best existing ones.
+
 ## Hard constraints — never break these
 
 - **No build step, no framework, no back-end.** Static files in `appFE/` served as-is
@@ -54,6 +61,9 @@ uv run --with playwright --with pytest pytest tests/
   `tests/test_app.py`, plus README (project structure) and ROADMAP updates.
 - Fortune-telling content is for entertainment: keep it positive/playful, add a light
   "for entertainment only" note, never give medical/financial/legal advice.
+- **Ship it polished.** A feature isn't done when it works — it's done when it looks and
+  feels good too. Run a `ux-polisher` pass before considering a tool complete: cohesive
+  with the rest of the page, animated reveal, great at 375px, reduced-motion aware.
 
 ## Skills & agents
 

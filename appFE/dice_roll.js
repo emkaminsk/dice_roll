@@ -44,11 +44,11 @@
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let rolling = false;
 
-  // Render a face into the given die element: pips for 1-6, otherwise the number.
-  function renderFace(die, value) {
-    die.innerHTML = '';
+  // Render one cube face: pips for 1-6, otherwise a centered number.
+  function renderPips(face, value) {
+    face.innerHTML = '';
     if (value >= 1 && value <= 6) {
-      die.classList.remove('die-number');
+      face.classList.remove('die-number');
       for (let i = 0; i < 9; i++) {
         const cell = document.createElement('span');
         cell.className = 'die-cell';
@@ -57,11 +57,50 @@
           pip.className = 'pip';
           cell.appendChild(pip);
         }
-        die.appendChild(cell);
+        face.appendChild(cell);
       }
     } else {
-      die.classList.add('die-number');
-      die.textContent = value;
+      face.classList.add('die-number');
+      face.textContent = value;
+    }
+  }
+
+  // Build a full 6-face cube (front/back/left/right/top/bottom) so the die
+  // always has real volume facing the camera and never goes edge-on/invisible
+  // mid-tumble, unlike a single flat face. Only the front (and, for a 1-6
+  // pip face, its complementary back) ever change — the other four sides are
+  // filled once with fixed decorative pips purely so the cube reads as a
+  // real die from any angle; they never affect the announced result.
+  function buildDie() {
+    const wrap = document.createElement('div');
+    wrap.className = 'die';
+    const cube = document.createElement('div');
+    cube.className = 'die-cube';
+    ['front', 'back', 'right', 'left', 'top', 'bottom'].forEach((pos) => {
+      const face = document.createElement('div');
+      face.className = 'die-face die-' + pos;
+      cube.appendChild(face);
+    });
+    wrap.appendChild(cube);
+    renderPips(cube.querySelector('.die-top'), 2);
+    renderPips(cube.querySelector('.die-bottom'), 5);
+    renderPips(cube.querySelector('.die-right'), 3);
+    renderPips(cube.querySelector('.die-left'), 4);
+    return wrap;
+  }
+
+  // Show `value` on a die's front face (the one the result text refers to),
+  // keeping the back face as its real-die complement (opposite faces sum to
+  // 7) when the value is a normal 1-6 pip face.
+  function renderFace(dieWrap, value) {
+    const front = dieWrap.querySelector('.die-front');
+    const back = dieWrap.querySelector('.die-back');
+    renderPips(front, value);
+    if (value >= 1 && value <= 6) {
+      renderPips(back, 7 - value);
+    } else {
+      back.innerHTML = '';
+      back.classList.remove('die-number');
     }
   }
 
@@ -90,8 +129,7 @@
     diceGraphics.innerHTML = '';
     const dice = [];
     for (let i = 0; i < count; i++) {
-      const die = document.createElement('div');
-      die.className = 'die';
+      const die = buildDie();
       diceGraphics.appendChild(die);
       dice.push(die);
     }
