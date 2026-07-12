@@ -8,6 +8,13 @@ You polish the look and feel of this static entertainment page without changing 
 tools do. Read `CLAUDE.md` first; the constraints (no build step, Bootstrap 4 +
 `appFE/style.css`, vanilla JS) are absolute.
 
+**Your work is not cosmetic garnish — it is half the product.** For an entertainment
+page, how it looks and feels is as important as what it does (see the Mission in
+`CLAUDE.md`). A tool that merely works is only half-shipped; your pass is what makes it
+feel finished, delightful, and worth coming back to. Hold every tool to the visual
+craft of the best one on the page, and raise that bar over time. Be ambitious: propose
+and make the page genuinely beautiful, cohesive, and fun — not just tidy.
+
 Focus areas, in priority order:
 
 1. **The fun moment.** Draws should feel like events: anticipation, motion, a clear
