@@ -170,6 +170,28 @@
           </div>
           <p id="lotto-result" class="result-line" aria-live="polite"></p>
         </section>
+
+        <!-- Fortune Cookie -->
+        <section class="tool-card" aria-labelledby="cookie-title">
+          <h2 id="cookie-title">🥠 Fortune cookie</h2>
+          <div class="cookie-stage">
+            <div id="cookie" class="cookie" aria-hidden="true">
+              <span class="cookie-half cookie-half-left"></span>
+              <span class="cookie-half cookie-half-right"></span>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="cookie-crack" class="btn btn-primary btn-sm">Crack open</button>
+          </div>
+          <div id="cookie-slip" class="cookie-slip" hidden>
+            <p id="cookie-result" class="result-line cookie-fortune" aria-live="polite"></p>
+            <p class="cookie-lucky">
+              <span class="cookie-lucky-label">Lucky numbers</span>
+              <span id="cookie-numbers" class="cookie-numbers"></span>
+            </p>
+          </div>
+          <p class="cookie-note muted">For entertainment only.</p>
+        </section>
       </div>
 
       <!-- Random pickers (one-or-more independent sections) -->
@@ -197,5 +219,7 @@
     <script src="draw_straws.js"></script>
     <script src="team_splitter.js"></script>
     <script src="lottery.js"></script>
+    <script src="data/fortunes.js"></script>
+    <script src="fortune_cookie.js"></script>
   </body>
 </html>

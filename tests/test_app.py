@@ -475,6 +475,67 @@ def test_lotto_does_not_disturb_other_tools(page):
     assert page.text_content(".picker-section .result-line").strip() != ""
 
 
+def _crack_cookie(page):
+    """Click Crack open, wait for the slip to reveal, and return (fortune, numbers)."""
+    page.click("#cookie-crack")
+    page.wait_for_function(
+        "() => { const s = document.querySelector('#cookie-slip');"
+        " return s && !s.hidden"
+        " && document.querySelector('#cookie-result').textContent.trim() !== ''"
+        " && document.querySelectorAll('#cookie-numbers .cookie-num').length === 6; }",
+        timeout=4000,
+    )
+    fortune = page.text_content("#cookie-result").strip()
+    numbers = page.evaluate(
+        "() => Array.from(document.querySelectorAll('#cookie-numbers .cookie-num'))"
+        ".map(el => parseInt(el.textContent, 10))"
+    )
+    return fortune, numbers
+
+
+def test_fortune_cookie_reveals_fortune_and_lucky_numbers(page):
+    """Cracking reveals a real FORTUNES entry and 6 unique numbers in [1,69] sorted."""
+    fortune, numbers = _crack_cookie(page)
+    fortunes = page.evaluate("() => FORTUNES")
+    assert fortune in fortunes
+    assert len(numbers) == 6
+    assert len(set(numbers)) == 6  # unique
+    assert all(1 <= n <= 69 for n in numbers)
+    assert numbers == sorted(numbers)  # displayed ascending
+    # Cracking again yields a fresh (still valid) draw.
+    fortune2, numbers2 = _crack_cookie(page)
+    assert fortune2 in fortunes
+    assert len(set(numbers2)) == 6
+    assert all(1 <= n <= 69 for n in numbers2)
+
+
+def test_fortune_cookie_does_not_disturb_other_tools(page):
+    """Cracking a cookie leaves dice, wheel, coin, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _crack_cookie(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a crack.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
 def _ask_eightball(page, question="Will this test pass?"):
     """Ask the 8-ball and return the revealed answer text from the result line."""
     page.fill("#eightball-question", question)

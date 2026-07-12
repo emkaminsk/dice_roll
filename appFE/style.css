@@ -544,6 +544,135 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   .lotto-ball { transition: none; }
 }
 
+/* Fortune cookie */
+.cookie-stage {
+  min-height: 132px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.cookie {
+  position: relative;
+  width: 132px;
+  height: 96px;
+}
+/* Two folded lobes that meet in the middle; each one swings away on crack. */
+.cookie-half {
+  position: absolute;
+  top: 0;
+  width: 68px;
+  height: 96px;
+  background: radial-gradient(120% 85% at 50% 22%, #fdeabf, #f4c95d 55%, #e0a534 100%);
+  box-shadow:
+    inset 0 -7px 11px rgba(158, 102, 22, 0.35),
+    inset 0 5px 9px rgba(255, 255, 255, 0.55),
+    0 5px 12px rgba(148, 96, 20, 0.22);
+  transition: transform 1s cubic-bezier(0.55, -0.28, 0.35, 1.32);
+}
+/* A soft crease where the fold pinches the cookie inward. */
+.cookie-half::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  width: 9px;
+  border-radius: 50%;
+  background: linear-gradient(rgba(158, 102, 22, 0.05), rgba(158, 102, 22, 0.32), rgba(158, 102, 22, 0.05));
+}
+.cookie-half-left {
+  left: 0;
+  border-radius: 66px 22px 40px 66px / 66px 30px 40px 66px;
+  transform-origin: 92% 50%;
+}
+.cookie-half-left::after { right: -2px; }
+.cookie-half-right {
+  right: 0;
+  border-radius: 22px 66px 66px 40px / 30px 66px 66px 40px;
+  transform-origin: 8% 50%;
+}
+.cookie-half-right::after { left: -2px; }
+.cookie.is-cracked .cookie-half-left {
+  transform: translateX(-26px) rotate(-26deg);
+}
+.cookie.is-cracked .cookie-half-right {
+  transform: translateX(26px) rotate(26deg);
+}
+
+/* The revealed paper slip + lucky numbers. */
+.cookie-slip {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.cookie-slip.is-shown {
+  opacity: 1;
+  transform: translateY(0);
+}
+.cookie-fortune {
+  position: relative;
+  margin-top: 4px;
+  padding: 14px 18px;
+  background: linear-gradient(180deg, #fffdf5, #fdf5e0);
+  border: 1px solid #ecdca6;
+  border-radius: 4px;
+  box-shadow: 0 2px 7px rgba(148, 96, 20, 0.16);
+  color: #5b4a1e;
+  font-style: italic;
+  line-height: 1.45;
+  /* Softly torn top and bottom edges, like a real fortune slip. */
+  -webkit-mask:
+    radial-gradient(5px 5px at 6px 0, transparent 96%, #000) repeat-x top / 12px 5px,
+    radial-gradient(5px 5px at 6px 100%, transparent 96%, #000) repeat-x bottom / 12px 5px,
+    linear-gradient(#000, #000) no-repeat center / 100% calc(100% - 8px);
+  mask:
+    radial-gradient(5px 5px at 6px 0, transparent 96%, #000) repeat-x top / 12px 5px,
+    radial-gradient(5px 5px at 6px 100%, transparent 96%, #000) repeat-x bottom / 12px 5px,
+    linear-gradient(#000, #000) no-repeat center / 100% calc(100% - 8px);
+}
+.cookie-lucky {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 12px 0 0;
+}
+.cookie-lucky-label {
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.cookie-numbers {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cookie-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 27px;
+  height: 27px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 34% 28%, #fef3c7, #fde08a 75%);
+  border: 1px solid #eecb72;
+  color: #8a4d0d;
+  font-weight: 700;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.cookie-note {
+  margin-top: 12px;
+  font-size: 0.75rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cookie-half,
+  .cookie-slip { transition: none; }
+}
+
 /* Winner celebration overlay */
 .celebration-overlay {
   position: fixed;

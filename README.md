@@ -1,7 +1,7 @@
 # Dice Roll & Random Picker
 
 A lightweight, browser-based collection of fair random-selection tools. No login, no
-installation, nothing stored — reload the page to start fresh. It bundles eight
+installation, nothing stored — reload the page to start fresh. It bundles nine
 independent tools on a single page:
 
 - **🎲 Dice Roller** — roll one or several dice with any number of sides; see each
@@ -14,6 +14,9 @@ independent tools on a single page:
 - **🎰 Lucky Numbers** — draw k unique numbers from 1..N with presets for common
   lotteries (6 from 49, 5 from 50, …); the draw is a uniform k-combination (partial
   Fisher–Yates), revealed as ball-machine style balls and shown sorted ascending.
+- **🥠 Fortune Cookie** — crack open an animated cookie to reveal a playful fortune
+  plus six "lucky numbers" (unique, from 1..69). Both are chosen fairly up front; the
+  crack is pure decoration. For entertainment only.
 - **🎯 Random Picker** — enter options and draw one at random; add as many independent picker sections as you like.
 
 All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
@@ -97,7 +100,7 @@ server-side code. See [`.ai/tech-stack.md`](.ai/tech-stack.md) for the rationale
 
 ```
 appFE/
-  index.html         # single page, eight tools
+  index.html         # single page, nine tools
   style.css          # modern-clean custom theme
   random.js          # shared uniform RNG (crypto.getRandomValues)
   celebration.js     # full-screen winner overlay + confetti (used by the wheel)
@@ -109,8 +112,10 @@ appFE/
   draw_straws.js     # draw straws — bundle in a cup, one short straw per round
   team_splitter.js   # team splitter — Fisher–Yates shuffle + round-robin dealing
   lottery.js         # lucky numbers — unique k-combination draw with a ball reveal
+  fortune_cookie.js  # fortune cookie — crack animation, fortune + lucky numbers reveal
   data/              # content datasets for content-driven tools
     eightball.js     # the 20 classic Magic 8-Ball answers (EIGHTBALL_ANSWERS)
+    fortunes.js      # the fortune-cookie fortunes (FORTUNES)
 tests/
   test_app.py        # Playwright end-to-end tests
 ```
