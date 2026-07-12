@@ -8,36 +8,95 @@
   --border: #e2e8f0;
   --accent: #4f46e5;
   --accent-ink: #4338ca;
+  --accent-soft: rgba(79, 70, 229, 0.1);
   --highlight: #4f46e5;
   --radius: 14px;
+  --radius-sm: 10px;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-hover: 0 4px 8px rgba(15, 23, 42, 0.05), 0 16px 32px rgba(15, 23, 42, 0.09);
+
+  /* Spacing scale, used by newer rules; existing hard-coded values are left
+     alone to avoid unrelated layout shifts. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Shared motion tokens for reveal-style transitions. */
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 400ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  color-scheme: light;
+}
+
+/* Dark mode — same shell, same components; skeuomorphic game props (dice,
+   coin, 8-ball, cookie, lotto balls, confetti) intentionally keep their
+   real-world colors in both themes, same as a physical object would. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0f1e;
+    --surface: #131b2e;
+    --ink: #e7ebf6;
+    --muted: #93a1bd;
+    --border: #263352;
+    --accent: #818cf8;
+    --accent-ink: #a5b4fc;
+    --accent-soft: rgba(129, 140, 248, 0.16);
+    --highlight: #a5b4fc;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-hover: 0 4px 10px rgba(0, 0, 0, 0.4), 0 18px 36px rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(680px 420px at 12% -8%, var(--accent-soft), transparent 65%),
+    radial-gradient(620px 380px at 88% 8%, rgba(14, 165, 233, 0.08), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 0 0 48px;
   line-height: 1.5;
+  transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
 }
 
 .page-header {
   text-align: center;
-  padding: 48px 16px 24px;
+  padding: 56px 16px 28px;
 }
 .page-header h1 {
-  font-weight: 700;
-  font-size: clamp(1.6rem, 4vw, 2.4rem);
-  margin: 0 0 8px;
+  font-weight: 800;
+  font-size: clamp(1.75rem, 4.6vw, 2.6rem);
+  margin: 0 0 10px;
   letter-spacing: -0.02em;
+  color: var(--ink); /* fallback for browsers without background-clip: text */
+  background: linear-gradient(135deg, var(--ink) 35%, var(--accent-ink));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .page-header h1 { -webkit-text-fill-color: transparent; }
 }
 .tagline {
   color: var(--muted);
   margin: 0;
   font-size: 1.02rem;
+}
+/* The fixed home button (top-left) sits over this header's safe area on
+   small screens, so give the title extra headroom there rather than let
+   it overlap. */
+@media (max-width: 768px) {
+  .page-header { padding-top: 84px; }
 }
 
 .container { max-width: 960px; }
@@ -57,6 +116,15 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 24px;
+  transition: box-shadow var(--dur-base) var(--ease-standard),
+    transform var(--dur-base) var(--ease-standard),
+    border-color var(--dur-base) var(--ease-standard),
+    background-color var(--dur-base) var(--ease-standard);
+}
+/* A gentle lift on hover ties every card to the same "designed system" feel.
+   Skipped for touch devices (no hover) and reduced motion. */
+@media (hover: hover) and (pointer: fine) {
+  .tool-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
 }
 .tool-card h2 {
   font-size: 1.2rem;
@@ -74,18 +142,26 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
 .form-control {
   border-radius: 10px;
   border: 1px solid var(--border);
-  transition: border-color .15s, box-shadow .15s;
+  background-color: var(--surface);
+  color: var(--ink);
+  transition: border-color .15s, box-shadow .15s, background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
 }
 .form-control:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
+.form-control::placeholder { color: var(--muted); opacity: 1; }
 .narrow-input { width: 96px; }
 
 .btn {
   border-radius: 10px;
   font-weight: 600;
   letter-spacing: .01em;
+  transition: background-color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard);
 }
 .btn-primary {
   background: var(--accent);
@@ -95,6 +171,10 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   background: var(--accent-ink);
   border-color: var(--accent-ink);
 }
+@media (hover: hover) and (pointer: fine) {
+  .btn:not(:disabled):hover { transform: translateY(-1px); }
+}
+.btn:active:not(:disabled) { transform: translateY(0); }
 .btn:disabled { opacity: .55; }
 .btn-remove {
   color: var(--muted);
@@ -105,6 +185,47 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
 .btn-remove:hover { color: #ef4444; }
 
 .btn-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+
+/* Consistent, visible keyboard-focus ring across every interactive element
+   (buttons, links, selects) — inputs/textareas keep their own ring above. */
+.btn:focus-visible,
+.btn-remove:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1.5px var(--accent);
+}
+select.form-control:focus-visible { outline: none; }
+
+/* Touch targets: every tappable control reaches the 44px minimum on
+   touchscreens without changing how it looks on desktop pointer input. */
+@media (max-width: 576px) {
+  .btn {
+    min-height: 44px;
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-remove { min-height: 44px; padding: 0 12px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Bootstrap's outline/link buttons carry their own hard-coded gray;
+     re-tint them to the dark palette so they don't look bleached-out. */
+  .btn-outline-secondary {
+    color: var(--muted);
+    border-color: var(--border);
+  }
+  .btn-outline-secondary:hover:not(:disabled) {
+    color: var(--ink);
+    background-color: var(--accent-soft);
+    border-color: var(--accent);
+  }
+  .btn-link:not(.btn-remove) {
+    color: var(--accent-ink);
+  }
+}
 
 /* Dice */
 .dice-graphics {
@@ -153,6 +274,9 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
 .die.rolling {
   animation: tumble 0.9s ease-out;
 }
+@media (prefers-reduced-motion: reduce) {
+  .die.rolling { animation: none; }
+}
 @keyframes tumble {
   0%   { transform: translateY(0) rotate(0deg) scale(1); }
   15%  { transform: translateY(-42px) rotate(140deg) scale(1.05); }
@@ -167,6 +291,19 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
 .highlight {
   color: var(--highlight);
   font-weight: 700;
+  display: inline-block;
+  /* Every tool creates a fresh <span class="highlight"> to show its result,
+     so this replays automatically on every reveal — one shared "moment of
+     emphasis" across all nine tools, no per-tool JS needed. */
+  animation: reveal-pop 0.4s var(--ease-out-back) both;
+}
+@keyframes reveal-pop {
+  0%   { opacity: 0; transform: translateY(3px) scale(0.92); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .highlight { animation: none; }
 }
 .muted { color: var(--muted); }
 
@@ -331,6 +468,12 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   transform: translateY(-8px);
   outline: none;
 }
+/* Hover alone isn't a visible-enough focus indicator for keyboard users —
+   add a ring on the straw's own body so tabbing through the bundle is legible. */
+.straw:not(:disabled):focus-visible .straw-body {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.25), 0 2px 5px rgba(15, 23, 42, 0.15);
+}
 .straw-body {
   display: block;
   width: 72%;
@@ -430,7 +573,7 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   border: 1px solid var(--border);
   border-top: 3px solid var(--team-color, var(--accent));
   border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  background: linear-gradient(180deg, var(--surface), var(--bg));
   box-shadow: var(--shadow);
   padding: 12px 14px 14px;
 }
@@ -465,7 +608,7 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   font-weight: 500;
   padding: 5px 10px;
   border-radius: 8px;
-  background: #f1f5f9;
+  background: var(--bg);
   word-break: break-word;
 }
 .team-card.is-revealing {
@@ -766,7 +909,9 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   text-align: center;
   color: var(--muted);
   font-size: 0.85rem;
-  margin-top: 40px;
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
 }
 
 /* Home link (matches 2048 subpage) */

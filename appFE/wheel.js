@@ -57,6 +57,7 @@
 
   let angle = 0;          // current rotation, radians
   let spinning = false;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // localStorage persistence — a convenience only. All access is guarded so the
   // wheel works fully when storage is unavailable/disabled (private mode, etc.).
@@ -169,6 +170,17 @@
     const segCenter = winner * seg + seg / 2;
     const turns = 5 + randomIndex(3); // 5-7 full rotations
     const target = turns * Math.PI * 2 + (pointer - segCenter);
+
+    if (reduceMotion) {
+      // Still land on the same fairly-chosen winner — just skip the tumble.
+      angle = target;
+      draw();
+      spinning = false;
+      updateSpinState(names());
+      resultEl.innerHTML = `Winner: <span class="highlight">${escapeHtml(list[winner])}</span>`;
+      if (window.Celebration) window.Celebration.show(list[winner]);
+      return;
+    }
 
     const start = angle;
     const delta = target - start;
