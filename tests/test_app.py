@@ -407,6 +407,74 @@ def test_team_splitter_does_not_disturb_other_tools(page):
     assert page.text_content(".picker-section .result-line").strip() != ""
 
 
+def _draw_lotto(page, k):
+    """Click Draw and wait until all k balls have dropped; return their numbers."""
+    page.click("#lotto-draw")
+    page.wait_for_function(
+        f"() => document.querySelectorAll('#lotto-balls .lotto-ball').length === {k}",
+        timeout=6000,
+    )
+    return page.evaluate(
+        "() => Array.from(document.querySelectorAll('#lotto-balls .lotto-ball'))"
+        ".map(b => parseInt(b.textContent, 10))"
+    )
+
+
+def test_lotto_draws_six_unique_sorted(page):
+    """6 from 49 yields exactly 6 unique numbers in [1, 49], shown ascending."""
+    numbers = _draw_lotto(page, 6)
+    assert len(numbers) == 6
+    assert len(set(numbers)) == 6  # unique
+    assert all(1 <= n <= 49 for n in numbers)
+    assert numbers == sorted(numbers)  # displayed ascending
+
+
+def test_lotto_preset_sets_k_and_n(page):
+    """Selecting a preset fills the How-many and range inputs."""
+    page.select_option("#lotto-preset", "5:50")
+    assert page.input_value("#lotto-k") == "5"
+    assert page.input_value("#lotto-n") == "50"
+    numbers = _draw_lotto(page, 5)
+    assert len(numbers) == 5
+    assert all(1 <= n <= 50 for n in numbers)
+
+
+def test_lotto_k_greater_than_n_shows_guidance(page):
+    """Asking for more numbers than the range holds guides and draws nothing."""
+    page.fill("#lotto-k", "10")
+    page.fill("#lotto-n", "5")
+    page.click("#lotto-draw")
+    assert page.locator("#lotto-balls .lotto-ball").count() == 0
+    assert "Can't draw" in page.text_content("#lotto-result")
+
+
+def test_lotto_does_not_disturb_other_tools(page):
+    """Drawing lucky numbers leaves dice, wheel, coin, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _draw_lotto(page, 6)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a draw.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
 def _ask_eightball(page, question="Will this test pass?"):
     """Ask the 8-ball and return the revealed answer text from the result line."""
     page.fill("#eightball-question", question)

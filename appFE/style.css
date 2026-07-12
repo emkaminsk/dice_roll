@@ -487,6 +487,63 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   .team-member.is-revealing { animation: none; }
 }
 
+/* Lucky numbers */
+.lotto-preset { max-width: 220px; }
+.lotto-fields {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.lotto-fields .form-group { margin: 0; }
+.lotto-balls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 56px;
+  margin-top: 18px;
+  align-items: center;
+}
+.lotto-ball {
+  --ball: #4f46e5;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 50% 120%, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0) 60%),
+    var(--ball);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.25),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.25),
+    inset 0 2px 4px rgba(255, 255, 255, 0.4);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  /* Start tucked away in the machine; .is-shown pops it into place. */
+  opacity: 0;
+  transform: scale(0.3) translateY(-14px);
+  transition: opacity 0.28s ease, transform 0.35s cubic-bezier(0.18, 0.9, 0.32, 1.4);
+}
+/* Cosmetic colour rotation by position — never the drawn value. */
+.lotto-ball:nth-child(6n + 1) { --ball: #ef4444; }
+.lotto-ball:nth-child(6n + 2) { --ball: #f59e0b; }
+.lotto-ball:nth-child(6n + 3) { --ball: #10b981; }
+.lotto-ball:nth-child(6n + 4) { --ball: #0ea5e9; }
+.lotto-ball:nth-child(6n + 5) { --ball: #8b5cf6; }
+.lotto-ball:nth-child(6n + 6) { --ball: #ec4899; }
+.lotto-ball.is-shown {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lotto-ball { transition: none; }
+}
+
 /* Winner celebration overlay */
 .celebration-overlay {
   position: fixed;

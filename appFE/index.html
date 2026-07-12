@@ -137,6 +137,39 @@
           <p id="team-result" class="result-line" aria-live="polite"></p>
           <div id="team-results" class="team-results"></div>
         </section>
+
+        <!-- Lucky Numbers -->
+        <section class="tool-card" aria-labelledby="lotto-title">
+          <h2 id="lotto-title">🎰 Lucky numbers</h2>
+          <div class="form-group">
+            <label for="lotto-preset">Lottery preset</label>
+            <select id="lotto-preset" class="form-control lotto-preset">
+              <option value="6:49" selected>6 from 49</option>
+              <option value="5:50">5 from 50</option>
+              <option value="6:59">6 from 59</option>
+              <option value="7:35">7 from 35</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </div>
+          <div class="lotto-fields">
+            <div class="form-group">
+              <label for="lotto-k">How many</label>
+              <input type="number" id="lotto-k" name="lotto-k" min="1"
+                value="6" class="form-control narrow-input">
+            </div>
+            <div class="form-group">
+              <label for="lotto-n">From 1 to</label>
+              <input type="number" id="lotto-n" name="lotto-n" min="1"
+                value="49" class="form-control narrow-input">
+            </div>
+          </div>
+          <div id="lotto-balls" class="lotto-balls" role="group"
+            aria-label="Drawn lucky numbers"></div>
+          <div class="btn-row">
+            <button type="button" id="lotto-draw" class="btn btn-primary btn-sm">Pick numbers</button>
+          </div>
+          <p id="lotto-result" class="result-line" aria-live="polite"></p>
+        </section>
       </div>
 
       <!-- Random pickers (one-or-more independent sections) -->
@@ -163,5 +196,6 @@
     <script src="eight_ball.js"></script>
     <script src="draw_straws.js"></script>
     <script src="team_splitter.js"></script>
+    <script src="lottery.js"></script>
   </body>
 </html>
