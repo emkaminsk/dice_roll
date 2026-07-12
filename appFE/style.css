@@ -417,6 +417,76 @@ label { font-weight: 500; font-size: 0.9rem; color: var(--muted); }
   .straw:not(:disabled):focus-visible { transform: none; }
 }
 
+/* Team splitter */
+.team-names { resize: vertical; }
+.team-count-group { margin-top: 14px; margin-bottom: 0; }
+.team-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.team-card {
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--team-color, var(--accent));
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow: var(--shadow);
+  padding: 12px 14px 14px;
+}
+.team-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.team-name {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--team-color, var(--accent-ink));
+}
+.team-size {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.team-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.team-member {
+  font-size: 0.92rem;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  word-break: break-word;
+}
+.team-card.is-revealing {
+  animation: team-card-in 0.4s ease both;
+}
+.team-member.is-revealing {
+  animation: team-member-in 0.35s ease both;
+}
+@keyframes team-card-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes team-member-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .team-card.is-revealing,
+  .team-member.is-revealing { animation: none; }
+}
+
 /* Winner celebration overlay */
 .celebration-overlay {
   position: fixed;

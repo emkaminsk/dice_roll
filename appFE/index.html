@@ -119,6 +119,24 @@
           </div>
           <p id="straws-result" class="result-line" aria-live="polite"></p>
         </section>
+
+        <!-- Team Splitter -->
+        <section class="tool-card" aria-labelledby="team-title">
+          <h2 id="team-title">👥 Split into teams</h2>
+          <textarea id="team-names" class="form-control team-names" rows="4"
+            placeholder="One name per line"
+            aria-label="Team member names, one per line"></textarea>
+          <div class="form-group team-count-group">
+            <label for="team-count">Number of teams</label>
+            <input type="number" id="team-count" name="team-count" min="2"
+              value="2" class="form-control narrow-input">
+          </div>
+          <div class="btn-row">
+            <button type="button" id="team-split" class="btn btn-primary btn-sm">Split</button>
+          </div>
+          <p id="team-result" class="result-line" aria-live="polite"></p>
+          <div id="team-results" class="team-results"></div>
+        </section>
       </div>
 
       <!-- Random pickers (one-or-more independent sections) -->
@@ -144,5 +162,6 @@
     <script src="data/eightball.js"></script>
     <script src="eight_ball.js"></script>
     <script src="draw_straws.js"></script>
+    <script src="team_splitter.js"></script>
   </body>
 </html>

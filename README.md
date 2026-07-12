@@ -1,7 +1,7 @@
 # Dice Roll & Random Picker
 
 A lightweight, browser-based collection of fair random-selection tools. No login, no
-installation, nothing stored — reload the page to start fresh. It bundles six
+installation, nothing stored — reload the page to start fresh. It bundles seven
 independent tools on a single page:
 
 - **🎲 Dice Roller** — roll one or several dice with any number of sides; see each
@@ -10,6 +10,7 @@ independent tools on a single page:
 - **🪙 Coin Flip** — flip a coin with an animated 3D toss (heads/tails), plus a session streak counter that tracks the current run and total flips.
 - **🎱 Magic 8-Ball** — ask a yes/no question, shake the ball, and get one of the 20 classic answers revealed in its triangle window. For entertainment only.
 - **🥤 Draw Straws** — a colourful bundle of straws in a cup; pick how many, then tap to pull one at a time until the short straw turns up. The short straw is chosen fairly up front; "New round" reshuffles.
+- **👥 Team Splitter** — paste a list of names and split them fairly into N random teams (uniform Fisher–Yates shuffle, then round-robin dealing so team sizes differ by at most one). Re-splitting reshuffles.
 - **🎯 Random Picker** — enter options and draw one at random; add as many independent picker sections as you like.
 
 All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
@@ -93,7 +94,7 @@ server-side code. See [`.ai/tech-stack.md`](.ai/tech-stack.md) for the rationale
 
 ```
 appFE/
-  index.html         # single page, six tools
+  index.html         # single page, seven tools
   style.css          # modern-clean custom theme
   random.js          # shared uniform RNG (crypto.getRandomValues)
   celebration.js     # full-screen winner overlay + confetti (used by the wheel)
@@ -103,6 +104,7 @@ appFE/
   coin_flip.js       # animated 3D coin flip with a session streak counter
   eight_ball.js      # Magic 8-Ball (shake + reveal a classic answer)
   draw_straws.js     # draw straws — bundle in a cup, one short straw per round
+  team_splitter.js   # team splitter — Fisher–Yates shuffle + round-robin dealing
   data/              # content datasets for content-driven tools
     eightball.js     # the 20 classic Magic 8-Ball answers (EIGHTBALL_ANSWERS)
 tests/

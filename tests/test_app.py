@@ -334,6 +334,79 @@ def test_draw_straws_does_not_disturb_other_tools(page):
     assert page.text_content(".picker-section .result-line").strip() != ""
 
 
+def _split_teams(page):
+    """Click Split and return the list of member-name lists, one per team card."""
+    page.click("#team-split")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#team-results .team-card').length > 0",
+        timeout=4000,
+    )
+    return page.evaluate(
+        "() => Array.from(document.querySelectorAll('#team-results .team-card'))"
+        ".map(c => Array.from(c.querySelectorAll('.team-member')).map(m => m.textContent))"
+    )
+
+
+def test_team_splitter_even_split(page):
+    """6 names into 2 teams gives two 3/3 teams covering all names, no duplicates."""
+    page.fill("#team-names", "Ann\nBob\nCy\nDee\nEli\nFay")
+    page.fill("#team-count", "2")
+    teams = _split_teams(page)
+    assert len(teams) == 2
+    assert sorted(len(t) for t in teams) == [3, 3]
+    members = [m for t in teams for m in t]
+    assert sorted(members) == ["Ann", "Bob", "Cy", "Dee", "Eli", "Fay"]
+    assert len(members) == len(set(members))  # no duplicates
+
+
+def test_team_splitter_uneven_split(page):
+    """5 names into 2 teams gives sizes 3 and 2 (differ by at most one)."""
+    page.fill("#team-names", "Ann\nBob\nCy\nDee\nEli")
+    page.fill("#team-count", "2")
+    teams = _split_teams(page)
+    assert sorted(len(t) for t in teams) == [2, 3]
+    members = sorted(m for t in teams for m in t)
+    assert members == ["Ann", "Bob", "Cy", "Dee", "Eli"]
+
+
+def test_team_splitter_too_many_teams_shows_guidance(page):
+    """More teams than names shows guidance, no crash and no team cards."""
+    page.fill("#team-names", "Ann\nBob")
+    page.fill("#team-count", "5")
+    page.click("#team-split")
+    assert page.locator("#team-results .team-card").count() == 0
+    result = page.text_content("#team-result").lower()
+    assert "add more names" in result or "lower the team count" in result
+
+
+def test_team_splitter_too_few_names_disables_split(page):
+    """With fewer than two names the Split control is disabled (guidance, not crash)."""
+    page.fill("#team-names", "Ann")
+    assert page.is_disabled("#team-split")
+
+
+def test_team_splitter_does_not_disturb_other_tools(page):
+    """Splitting teams leaves dice, wheel, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    page.fill("#team-names", "Ann\nBob\nCy\nDee")
+    _split_teams(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a split.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
 def _ask_eightball(page, question="Will this test pass?"):
     """Ask the 8-ball and return the revealed answer text from the result line."""
     page.fill("#eightball-question", question)
