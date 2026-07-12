@@ -33,13 +33,13 @@ Order within a tier is the suggested build order. Check items off as they ship.
 
 ## Tier 2 — drawing lots, richer interactions
 
-- [ ] **Draw straws** — a bundle of straws, everyone taps to pull one, exactly one is
+- [x] **Draw straws** — a bundle of straws, everyone taps to pull one, exactly one is
   short. Configurable number of straws; reveal animation.
-- [ ] **Fortune cookie** — crack open an animated cookie to reveal a fortune (plus
+- [x] **Fortune cookie** — crack open an animated cookie to reveal a fortune (plus
   "lucky numbers"). Needs a fortunes dataset (~100+ entries, positive/playful).
-- [ ] **Team splitter** — paste a list of names, split fairly into N random teams
+- [x] **Team splitter** — paste a list of names, split fairly into N random teams
   (uniform shuffle via Fisher–Yates on `randomIndex`).
-- [ ] **Lottery numbers** — draw k unique numbers from 1..N (presets for common
+- [x] **Lottery numbers** — draw k unique numbers from 1..N (presets for common
   lotteries), with a ball-machine style reveal.
 
 ## Tier 3 — fortune telling (content-heavy, high engagement)
