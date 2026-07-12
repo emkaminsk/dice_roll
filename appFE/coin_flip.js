@@ -3,6 +3,7 @@
 (function () {
   const button = document.querySelector('#coin-flip');
   const coin = document.querySelector('#coin');
+  const tossWrap = document.querySelector('.coin-toss');
   const result = document.querySelector('#coin-result');
   const streakEl = document.querySelector('#coin-streak');
 
@@ -38,6 +39,7 @@
   function finish(index) {
     result.innerHTML = `<span class="highlight">${FACES[index]}!</span>`;
     updateStreak(index);
+    if (tossWrap) tossWrap.classList.remove('is-tossing');
     flipping = false;
     button.disabled = false;
   }
@@ -57,6 +59,12 @@
     flipping = true;
     button.disabled = true;
     result.textContent = '';
+    if (tossWrap) {
+      // Restart the toss arc even if a previous one somehow left a class behind.
+      tossWrap.classList.remove('is-tossing');
+      void tossWrap.offsetWidth;
+      tossWrap.classList.add('is-tossing');
+    }
 
     // Land on a half-turn count of the right parity: several full spins
     // (even multiples of 180deg) plus 0/1 half-turn for heads/tails.

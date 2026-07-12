@@ -237,10 +237,43 @@ select.form-control:focus-visible { outline: none; }
   flex-wrap: wrap;
   gap: 12px;
 }
+/* A real 6-face cube, not a single tilting card: .die is the static
+   perspective viewport + ground-shadow host; .die-cube is the element that
+   actually rotates; the six .die-face children are pinned to the cube's
+   sides via translateZ. Because there is always solid volume facing the
+   camera, the die can tumble through any angle without ever going edge-on
+   and vanishing to a sliver (the failure mode of a single flat face). */
 .die {
   width: 78px;
   height: 78px;
   flex: none;
+  position: relative;
+  perspective: 420px;
+}
+/* Ground-contact shadow, separate from the rotating cube so it never spins
+   with it — it just tightens/spreads in step with the bounce height. */
+.die::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -9px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.32);
+  filter: blur(4px);
+  opacity: .5;
+  pointer-events: none;
+}
+.die-cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+.die-face {
+  position: absolute;
+  inset: 0;
   background: linear-gradient(145deg, #ffffff, #eef2ff);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -250,7 +283,15 @@ select.form-control:focus-visible { outline: none; }
   grid-template-rows: repeat(3, 1fr);
   padding: 12px;
   gap: 2px;
+  backface-visibility: hidden;
 }
+/* Cube geometry: each face pinned to one side of a 78px box (half = 39px). */
+.die-front  { transform: translateZ(39px); }
+.die-back   { transform: rotateY(180deg) translateZ(39px); }
+.die-right  { transform: rotateY(90deg) translateZ(39px); }
+.die-left   { transform: rotateY(-90deg) translateZ(39px); }
+.die-top    { transform: rotateX(90deg) translateZ(39px); }
+.die-bottom { transform: rotateX(-90deg) translateZ(39px); }
 .die-cell {
   display: flex;
   align-items: center;
@@ -263,7 +304,7 @@ select.form-control:focus-visible { outline: none; }
   background: var(--accent-ink);
 }
 /* Faces > 6 fall back to a centered number. */
-.die.die-number {
+.die-face.die-number {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -271,20 +312,44 @@ select.form-control:focus-visible { outline: none; }
   font-weight: 700;
   color: var(--accent-ink);
 }
-.die.rolling {
-  animation: tumble 0.9s ease-out;
+.die.rolling .die-cube {
+  animation: tumble 0.9s cubic-bezier(0.3, 0.1, 0.25, 1);
+}
+.die.rolling::after {
+  animation: die-shadow 0.9s cubic-bezier(0.3, 0.1, 0.25, 1);
 }
 @media (prefers-reduced-motion: reduce) {
-  .die.rolling { animation: none; }
+  .die.rolling .die-cube,
+  .die.rolling::after { animation: none; }
 }
+/* The cube tumbles through large, free rotations on all three axes — safe
+   now that it has real depth (unlike a single face, it never disappears).
+   All three axes land on an exact multiple of 360deg, so the front face is
+   visually upright the instant "rolling" is removed and the pip face for
+   the real result is drawn underneath (no snap). */
 @keyframes tumble {
-  0%   { transform: translateY(0) rotate(0deg) scale(1); }
-  15%  { transform: translateY(-42px) rotate(140deg) scale(1.05); }
-  35%  { transform: translateY(0) rotate(280deg) scale(1); }
-  50%  { transform: translateY(-26px) rotate(430deg) scale(1.03); }
-  70%  { transform: translateY(0) rotate(560deg) scale(1); }
-  85%  { transform: translateY(-10px) rotate(660deg) scale(1.01); }
-  100% { transform: translateY(0) rotate(720deg) scale(1); }
+  0%   { transform: translateY(0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1); }
+  10%  { transform: translateY(-16px) rotateX(95deg) rotateY(55deg) rotateZ(8deg) scale(1.02); }
+  25%  { transform: translateY(-48px) rotateX(260deg) rotateY(210deg) rotateZ(65deg) scale(1.08); }
+  40%  { transform: translateY(-8px) rotateX(430deg) rotateY(420deg) rotateZ(135deg) scale(0.94); }
+  55%  { transform: translateY(-32px) rotateX(560deg) rotateY(610deg) rotateZ(205deg) scale(1.05); }
+  70%  { transform: translateY(0) rotateX(650deg) rotateY(790deg) rotateZ(275deg) scale(0.95); }
+  82%  { transform: translateY(-13px) rotateX(695deg) rotateY(950deg) rotateZ(330deg) scale(1.04); }
+  92%  { transform: translateY(2px) rotateX(712deg) rotateY(1040deg) rotateZ(355deg) scale(0.97); }
+  100% { transform: translateY(0) rotateX(720deg) rotateY(1080deg) rotateZ(360deg) scale(1); }
+}
+/* Ground shadow: tight+dark at contact, wider+lighter at the top of a hop —
+   keyed to the same bounce timeline as .die-cube's translateY above. */
+@keyframes die-shadow {
+  0%   { transform: scale(0.75); opacity: .5; }
+  10%  { transform: scale(0.94); opacity: .38; }
+  25%  { transform: scale(1.3);  opacity: .2; }
+  40%  { transform: scale(0.86); opacity: .46; }
+  55%  { transform: scale(1.1);  opacity: .28; }
+  70%  { transform: scale(0.75); opacity: .5; }
+  82%  { transform: scale(0.92); opacity: .4; }
+  92%  { transform: scale(0.64); opacity: .58; }
+  100% { transform: scale(0.75); opacity: .5; }
 }
 
 .result-line { margin-top: 14px; min-height: 1.4em; }
@@ -313,20 +378,46 @@ select.form-control:focus-visible { outline: none; }
   display: flex;
   justify-content: center;
   margin-bottom: 16px;
+  /* A slight tabletop tilt framing the whole stage (canvas + pointer move as
+     one rigid unit, so they never fall out of alignment with each other) —
+     purely a presentation frame, the canvas's own drawing/coordinates and the
+     fair spin logic in wheel.js are untouched. */
+  transform: perspective(900px) rotateX(4deg);
+  transform-origin: 50% 85%;
 }
-#wheel-canvas { max-width: 100%; }
+#wheel-canvas {
+  max-width: 100%;
+  border-radius: 50%;
+  box-shadow:
+    0 22px 32px -16px rgba(15, 23, 42, 0.4),
+    inset 0 0 0 5px rgba(255, 255, 255, 0.55),
+    inset 0 0 0 7px rgba(15, 23, 42, 0.08);
+}
 .wheel-pointer {
   position: absolute;
   top: -2px;
   left: 50%;
   transform: translateX(-50%);
+  transform-origin: 50% 0%;
   width: 0;
   height: 0;
   border-left: 12px solid transparent;
   border-right: 12px solid transparent;
   border-top: 20px solid var(--accent);
   z-index: 2;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,.2));
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .35)) drop-shadow(0 1px 0 rgba(255, 255, 255, .35));
+}
+/* While the wheel is spinning the pointer flutters against the passing
+   segments rather than sitting dead-still. */
+.wheel-pointer.is-spinning {
+  animation: pointer-flutter 0.12s linear infinite;
+}
+@keyframes pointer-flutter {
+  0%, 100% { transform: translateX(-50%) rotate(0deg); }
+  50%      { transform: translateX(-50%) rotate(-7deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wheel-pointer.is-spinning { animation: none; }
 }
 .wheel-names { resize: vertical; }
 
@@ -339,12 +430,50 @@ select.form-control:focus-visible { outline: none; }
   perspective: 700px;
   margin-bottom: 8px;
 }
+/* Outer wrapper carries the toss arc (translateY) + landing wobble (rotateZ);
+   the inner #coin carries the spin (rotateY, driven from JS). Splitting these
+   across two elements lets both animate on the same `transform` property
+   without clobbering each other. */
+.coin-toss {
+  transform-style: preserve-3d;
+}
+.coin-toss.is-tossing {
+  animation: coin-toss 1.4s cubic-bezier(0.33, 0, 0.15, 1);
+}
+@keyframes coin-toss {
+  0%   { transform: translateY(0) rotateZ(0deg); }
+  20%  { transform: translateY(-8px) rotateZ(0deg); }
+  45%  { transform: translateY(-38px) rotateZ(0deg); }
+  70%  { transform: translateY(-12px) rotateZ(0deg); }
+  86%  { transform: translateY(3px) rotateZ(-3deg); }
+  94%  { transform: translateY(-1px) rotateZ(2deg); }
+  100% { transform: translateY(0) rotateZ(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coin-toss.is-tossing { animation: none; }
+}
 .coin {
   position: relative;
   width: 96px;
   height: 96px;
   transform-style: preserve-3d;
   will-change: transform;
+}
+/* A thin rim standing in for the coin's edge/thickness: a slim vertical
+   capsule turned 90deg from the faces, so it reads as a flat disc when a
+   face is toward the viewer and as the coin's edge when it spins past
+   side-on — the same trick a spinning real coin shows a "waist". */
+.coin-edge {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 50%;
+  width: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #8a5e0c, #f3ca6b 25%, #fde9b0 50%, #f3ca6b 75%, #8a5e0c);
+  transform: rotateY(90deg);
+  box-shadow: 0 0 0 1px rgba(124, 91, 18, 0.4);
 }
 .coin-face {
   position: absolute;
@@ -362,10 +491,11 @@ select.form-control:focus-visible { outline: none; }
 }
 .coin-heads {
   background: radial-gradient(circle at 35% 30%, #fde68a, #f59e0b 70%, #d97706);
+  transform: translateZ(3px);
 }
 .coin-tails {
   background: radial-gradient(circle at 35% 30%, #fcd34d, #d97706 70%, #b45309);
-  transform: rotateY(180deg);
+  transform: rotateY(180deg) translateZ(3px);
 }
 .coin-streak {
   margin-top: 6px;
@@ -380,6 +510,7 @@ select.form-control:focus-visible { outline: none; }
   align-items: center;
   justify-content: center;
   margin-bottom: 8px;
+  perspective: 500px;
 }
 .eightball {
   position: relative;
@@ -391,6 +522,8 @@ select.form-control:focus-visible { outline: none; }
   display: flex;
   align-items: center;
   justify-content: center;
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 .eightball-window {
   width: 62px;
@@ -412,19 +545,29 @@ select.form-control:focus-visible { outline: none; }
   text-align: center;
   margin-top: 18%;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transform: translateY(8px) scale(0.8);
+  transition: opacity 0.35s ease, transform 0.4s var(--ease-out-back);
 }
-.eightball.has-answer .eightball-answer { opacity: 1; }
+/* The answer appears to float up out of the dark liquid rather than just fade. */
+.eightball.has-answer .eightball-answer {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+/* A damped, sloshing wobble — each swing is smaller than the last, as if a die
+   floating in liquid inside the ball is settling, tilting in and out of the
+   screen (rotateX/rotateY) rather than sliding flat across it. */
 @keyframes eightball-shake {
-  0%, 100% { transform: translate(0, 0) rotate(0); }
-  15% { transform: translate(-7px, 3px) rotate(-4deg); }
-  35% { transform: translate(6px, -4px) rotate(3deg); }
-  55% { transform: translate(-5px, 4px) rotate(-3deg); }
-  75% { transform: translate(5px, -3px) rotate(3deg); }
-  90% { transform: translate(-2px, 1px) rotate(-1deg); }
+  0%, 100% { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+  10%  { transform: translate3d(-8px, 4px, 0) rotateX(9deg) rotateY(-11deg) rotateZ(-6deg); }
+  24%  { transform: translate3d(7px, -6px, 0) rotateX(-11deg) rotateY(10deg) rotateZ(5deg); }
+  38%  { transform: translate3d(-6px, 5px, 0) rotateX(9deg) rotateY(-8deg) rotateZ(-5deg); }
+  52%  { transform: translate3d(6px, -4px, 0) rotateX(-7deg) rotateY(7deg) rotateZ(4deg); }
+  66%  { transform: translate3d(-4px, 3px, 0) rotateX(5deg) rotateY(-5deg) rotateZ(-3deg); }
+  80%  { transform: translate3d(3px, -2px, 0) rotateX(-3deg) rotateY(3deg) rotateZ(2deg); }
+  92%  { transform: translate3d(-1px, 1px, 0) rotateX(1deg) rotateY(-1deg) rotateZ(-1deg); }
 }
 .eightball.is-shaking {
-  animation: eightball-shake 0.9s ease-in-out;
+  animation: eightball-shake 1s ease-in-out;
 }
 .eightball-note {
   margin-top: 6px;
@@ -432,6 +575,7 @@ select.form-control:focus-visible { outline: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .eightball.is-shaking { animation: none; }
+  .eightball-answer { transition: opacity 0.15s ease; transform: none; }
 }
 
 /* Draw straws */
@@ -646,6 +790,7 @@ select.form-control:focus-visible { outline: none; }
   min-height: 56px;
   margin-top: 18px;
   align-items: center;
+  perspective: 400px;
 }
 .lotto-ball {
   --ball: #4f46e5;
@@ -667,10 +812,16 @@ select.form-control:focus-visible { outline: none; }
     inset 0 -3px 6px rgba(0, 0, 0, 0.25),
     inset 0 2px 4px rgba(255, 255, 255, 0.4);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  /* Start tucked away in the machine; .is-shown pops it into place. */
+  /* Start tucked away above the machine, tipped back and tiny; .is-shown lets
+     it tumble down and settle with an overshoot, like it just dropped out of
+     the chute and bounced once on the tray. */
   opacity: 0;
-  transform: scale(0.3) translateY(-14px);
-  transition: opacity 0.28s ease, transform 0.35s cubic-bezier(0.18, 0.9, 0.32, 1.4);
+  transform: perspective(240px) translateY(-46px) rotateX(-65deg) rotateZ(-10deg) scale(0.35);
+  transition: opacity 0.3s ease, transform 0.55s cubic-bezier(0.18, 0.9, 0.32, 1.38);
+}
+/* Alternate the drop tilt per ball so a run of balls doesn't tumble in lockstep. */
+.lotto-ball:nth-child(even) {
+  transform: perspective(240px) translateY(-46px) rotateX(-65deg) rotateZ(10deg) scale(0.35);
 }
 /* Cosmetic colour rotation by position — never the drawn value. */
 .lotto-ball:nth-child(6n + 1) { --ball: #ef4444; }
@@ -681,7 +832,7 @@ select.form-control:focus-visible { outline: none; }
 .lotto-ball:nth-child(6n + 6) { --ball: #ec4899; }
 .lotto-ball.is-shown {
   opacity: 1;
-  transform: scale(1) translateY(0);
+  transform: perspective(240px) translateY(0) rotateX(0deg) rotateZ(0deg) scale(1);
 }
 @media (prefers-reduced-motion: reduce) {
   .lotto-ball { transition: none; }
@@ -694,13 +845,17 @@ select.form-control:focus-visible { outline: none; }
   align-items: center;
   justify-content: center;
   margin-bottom: 8px;
+  perspective: 480px;
 }
 .cookie {
   position: relative;
   width: 132px;
   height: 96px;
+  transform-style: preserve-3d;
 }
-/* Two folded lobes that meet in the middle; each one swings away on crack. */
+/* Two folded lobes that meet in the middle; each one swings away on crack,
+   hinging outward in real 3D (rotateY) and lifting toward the viewer
+   (translateZ) rather than just sliding sideways in the page's plane. */
 .cookie-half {
   position: absolute;
   top: 0;
@@ -736,10 +891,10 @@ select.form-control:focus-visible { outline: none; }
 }
 .cookie-half-right::after { left: -2px; }
 .cookie.is-cracked .cookie-half-left {
-  transform: translateX(-26px) rotate(-26deg);
+  transform: translateX(-26px) translateZ(20px) rotateY(-38deg) rotateX(8deg);
 }
 .cookie.is-cracked .cookie-half-right {
-  transform: translateX(26px) rotate(26deg);
+  transform: translateX(26px) translateZ(20px) rotateY(38deg) rotateX(-8deg);
 }
 
 /* The revealed paper slip + lucky numbers. */

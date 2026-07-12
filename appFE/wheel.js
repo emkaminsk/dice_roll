@@ -5,6 +5,7 @@
   const namesInput = document.querySelector('#wheel-names');
   const spinBtn = document.querySelector('#wheel-spin');
   const resultEl = document.querySelector('#wheel-result');
+  const pointerEl = document.querySelector('.wheel-pointer');
 
   // Clean, modern segment palette (cycled).
   const PALETTE = [
@@ -189,6 +190,8 @@
 
     function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
+    if (pointerEl) pointerEl.classList.add('is-spinning');
+
     function frame(now) {
       const t = Math.min((now - t0) / duration, 1);
       angle = start + delta * easeOutCubic(t);
@@ -197,6 +200,7 @@
         requestAnimationFrame(frame);
       } else {
         spinning = false;
+        if (pointerEl) pointerEl.classList.remove('is-spinning');
         updateSpinState(names());
         resultEl.innerHTML = `Winner: <span class="highlight">${escapeHtml(list[winner])}</span>`;
         if (window.Celebration) window.Celebration.show(list[winner]);
