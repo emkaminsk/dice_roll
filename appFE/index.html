@@ -100,6 +100,25 @@
           <p id="eightball-result" class="result-line" aria-live="polite"></p>
           <p class="eightball-note muted">For entertainment only.</p>
         </section>
+
+        <!-- Draw Straws -->
+        <section class="tool-card" aria-labelledby="straws-title">
+          <h2 id="straws-title">🥤 Draw straws</h2>
+          <div class="form-group">
+            <label for="straws-count">Number of straws</label>
+            <input type="number" id="straws-count" name="straws-count" min="2" max="12"
+              value="4" class="form-control narrow-input">
+          </div>
+          <div class="straws-stage">
+            <div id="straws-bundle" class="straws-bundle" role="group"
+              aria-label="Bundle of straws — tap one to pull it"></div>
+            <div class="straws-cup" aria-hidden="true"></div>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="straws-new" class="btn btn-primary btn-sm">New round</button>
+          </div>
+          <p id="straws-result" class="result-line" aria-live="polite"></p>
+        </section>
       </div>
 
       <!-- Random pickers (one-or-more independent sections) -->
@@ -124,5 +143,6 @@
     <script src="coin_flip.js"></script>
     <script src="data/eightball.js"></script>
     <script src="eight_ball.js"></script>
+    <script src="draw_straws.js"></script>
   </body>
 </html>

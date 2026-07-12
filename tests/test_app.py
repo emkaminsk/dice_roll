@@ -255,6 +255,85 @@ def test_coin_flip_does_not_disturb_other_tools(page):
     assert page.text_content(".picker-section .result-line").strip() != ""
 
 
+def _find_short_straw(page):
+    """Pull straws in order until the short one turns up; return its index."""
+    n = int(page.input_value("#straws-count"))
+    for i in range(n):
+        el = page.locator(f'#straws-bundle .straw[data-index="{i}"]')
+        if el.is_disabled():  # already revealed (e.g. auto-revealed on the loss)
+            continue
+        el.click()
+        if "You drew the short straw" in page.text_content("#straws-result"):
+            return i
+    return None
+
+
+def test_draw_straws_reveals_exactly_one_short(page):
+    """Pulling straws eventually reveals exactly one short straw and ends the round."""
+    short_i = _find_short_straw(page)
+    assert short_i is not None
+    assert "You drew the short straw" in page.text_content("#straws-result")
+    # Exactly one straw is marked short, and the whole bundle is now revealed.
+    assert page.locator("#straws-bundle .is-short").count() == 1
+    n = int(page.input_value("#straws-count"))
+    assert page.locator("#straws-bundle .straw.is-pulled").count() == n
+
+
+def test_draw_straws_count_rerenders(page):
+    """Changing the straw count re-renders exactly that many straws."""
+    page.fill("#straws-count", "7")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#straws-bundle .straw').length === 7"
+    )
+    assert page.locator("#straws-bundle .straw").count() == 7
+
+
+def test_draw_straws_invalid_count_clamps(page):
+    """A below-minimum count clamps to 2 without crashing (guidance, not error)."""
+    page.fill("#straws-count", "0")
+    page.locator("#straws-count").press("Tab")  # blur -> change -> clamp
+    page.wait_for_function(
+        "() => document.querySelectorAll('#straws-bundle .straw').length === 2"
+    )
+    assert page.input_value("#straws-count") == "2"
+
+
+def test_draw_straws_new_round_reshuffles(page):
+    """A finished round resets to a fresh, unrevealed bundle on New round."""
+    _find_short_straw(page)
+    assert page.locator("#straws-bundle .is-short").count() == 1
+    page.click("#straws-new")
+    assert page.locator("#straws-bundle .straw.is-pulled").count() == 0
+    assert "Tap a straw" in page.text_content("#straws-result")
+
+
+def test_draw_straws_does_not_disturb_other_tools(page):
+    """Drawing straws leaves dice, wheel, coin, 8-ball, and picker independent."""
+    page.fill("#max", "20")
+    page.fill("#wheel-names", "Alice\nBob")
+    fields = page.locator(".picker-section .option-field")
+    fields.nth(0).fill("Pizza")
+    fields.nth(1).fill("Sushi")
+
+    _find_short_straw(page)
+
+    # Other tools' inputs are untouched...
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert fields.nth(0).input_value() == "Pizza"
+    # ...and they still work after a draw.
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20
+    page.click("#coin-flip")
+    page.wait_for_function(
+        "() => { const t = document.querySelector('#coin-result').textContent;"
+        " return t.includes('Heads') || t.includes('Tails'); }",
+        timeout=4000,
+    )
+    page.locator(".picker-section .btn-primary").first.click()
+    assert page.text_content(".picker-section .result-line").strip() != ""
+
+
 def _ask_eightball(page, question="Will this test pass?"):
     """Ask the 8-ball and return the revealed answer text from the result line."""
     page.fill("#eightball-question", question)
