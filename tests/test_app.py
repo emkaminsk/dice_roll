@@ -1107,3 +1107,369 @@ def test_gd_does_not_disturb_other_tools(page):
     assert page.locator("#team-results .team-card").count() == 0
     page.click("form[name='Dice'] button[type=submit]")
     assert 1 <= _rolled_value(page) <= 20
+
+
+# --- Group Draw: hardening (edge cases, history, reset, interplay) ------------
+
+def _gd_run(page, setup):
+    return page.evaluate("s => GroupDrawSolver.run(s)", setup)
+
+
+def _gd_ppl(values_list, attr="a-team"):
+    return [{"id": f"p{i}", "name": f"P{i}", "values": {attr: v}} for i, v in enumerate(values_list)]
+
+
+def test_gd_zero_attributes_is_a_plain_splitter(page):
+    """Spec 4.1: zero attributes is allowed; people are split evenly (and size rules still work)."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    people = [{"id": f"p{i}", "name": f"P{i}", "values": {}} for i in range(11)]
+    setup = _gd_setup(people=people, groups=3)
+    setup["attributes"] = []
+    _gd_import(page, setup)
+    groups = _gd_draw(page)
+    assert sorted(len(g) for g in groups) == [3, 4, 4]
+    assert _gd_check(setup, groups) == []
+    # Size rule with no attributes.
+    setup["rules"] = [{"id": "s", "type": "size", "scope": "all", "min": 2, "max": 6}]
+    res = _gd_run(page, setup)
+    assert res["status"] == "ok" and all(2 <= len(g) <= 6 for g in res["groups"])
+    assert sorted(sum(res["groups"], [])) == sorted(p["id"] for p in people)
+
+
+def test_gd_draw_with_no_people_shows_guidance(page):
+    """Spec 4.4: drawing an empty setup explains itself instead of crashing."""
+    _gd_open(page)
+    page.click("#gd-draw")
+    page.wait_for_function("() => document.querySelector('#gd-status').textContent.trim() !== ''", timeout=4000)
+    assert page.locator("#gd-results .gd-card").count() == 0
+
+
+def test_gd_fewer_people_than_groups(page):
+    """More groups than people: does not crash; either empty groups are dealt or guidance is shown."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    setup = _gd_setup(people=_gd_people(3), groups=5)
+    _gd_import(page, setup)
+    groups = _gd_draw(page)
+    if groups:
+        assert sorted(sum(groups, [])) == ["p0", "p1", "p2"]
+    else:
+        assert page.text_content("#gd-status").strip() != "" or page.is_visible("#gd-alert")
+
+
+def test_gd_keep_together_vs_size_interplay(page):
+    """Spec 4.3/5.2: a keep-together block larger than the max group size is infeasible; equal to it is fine."""
+    together = {"id": "t", "type": "together", "scope": "all", "attrId": "a-team", "values": [1]}
+    people = _gd_ppl([1, 1, 1, 1] + [2, 3, 4, 5, 6, 7, 8, 9])  # block of 4, 12 people
+    too_big = _gd_setup(people=people, groups=3, rules=[
+        together, {"id": "s", "type": "size", "scope": "all", "min": None, "max": 3}])
+    res = _gd_run(page, too_big)
+    assert res["status"] == "infeasible"
+    fits = _gd_setup(people=people, groups=3, rules=[
+        together, {"id": "s", "type": "size", "scope": "all", "min": 4, "max": 4}])
+    for _ in range(10):
+        res = _gd_run(page, fits)
+        assert res["status"] == "ok"
+        assert _gd_check(fits, res["groups"]) == []
+        assert any({"p0", "p1", "p2", "p3"} <= set(g) for g in res["groups"])
+    # Without size rules, balance (sizes 4/4/4) still has to keep the block whole.
+    bal = _gd_setup(people=people, groups=3, rules=[together])
+    for _ in range(10):
+        res = _gd_run(page, bal)
+        assert res["status"] == "ok" and sorted(len(g) for g in res["groups"]) == [4, 4, 4]
+        assert _gd_check(bal, res["groups"]) == []
+
+
+def test_gd_keep_together_block_too_big_for_balance_is_infeasible(page):
+    """A block of 5 with 3 balanced groups of 4 cannot be placed."""
+    people = _gd_ppl([1] * 5 + [2, 3, 4, 5, 6, 7, 8])
+    setup = _gd_setup(people=people, groups=3, rules=[
+        {"id": "t", "type": "together", "scope": "all", "attrId": "a-team", "values": [1]}])
+    assert _gd_run(page, setup)["status"] == "infeasible"
+
+
+def test_gd_keep_together_hint_when_block_exceeds_group_size(page):
+    """Spec 4.3: live hint when a keep-together set cannot fit the largest group."""
+    _gd_open(page)
+    people = _gd_ppl([1] * 5 + [2, 3, 4, 5, 6, 7, 8])
+    _gd_import(page, _gd_setup(people=people, groups=3))
+    _gd_add_rule(page, "together", "a-team", values="1")
+    page.wait_for_function("() => document.querySelector('#gd-hints').textContent.trim() !== ''", timeout=4000)
+    assert page.locator(".gd-rule.is-error, #gd-hints li").count() >= 1
+
+
+def test_gd_together_and_apart_combine(page):
+    """Keep-together on some teams and keep-apart on type hold simultaneously."""
+    people = []
+    for i in range(18):
+        people.append({"id": f"p{i}", "name": f"P{i}", "values": {"a-team": (i % 6) + 1,
+                       "a-type": ["consultant", "developer", "manager"][i % 3]}})
+    setup = _gd_setup(people=people, groups=3, rules=[
+        {"id": "t", "type": "together", "scope": "all", "attrId": "a-team", "values": [1, 2]},
+        {"id": "a", "type": "apart", "scope": "all", "attrId": "a-type", "k": 3},
+    ])
+    for _ in range(15):
+        res = _gd_run(page, setup)
+        if res["status"] != "ok":
+            raise AssertionError(res)
+        assert _gd_check(setup, res["groups"]) == []
+
+
+def test_gd_integer_sum_rules_with_negatives(page):
+    """Spec 4.1/4.3: integer sums honour negative values and min/max bounds in every group."""
+    vals = [-3, -2, -1, 0, 1, 2, 3, 4, -4, 5, -5, 6]
+    setup = _gd_setup(people=_gd_ppl(vals), groups=3, rules=[
+        {"id": "s", "type": "sum", "scope": "all", "attrId": "a-team", "min": -2, "max": 4}])
+    seen = set()
+    for _ in range(20):
+        res = _gd_run(page, setup)
+        assert res["status"] == "ok"
+        assert _gd_check(setup, res["groups"]) == []
+        seen.add(tuple(sorted(tuple(sorted(g)) for g in res["groups"])))
+    assert len(seen) >= 2
+
+
+def test_gd_integer_sum_rule_infeasible_and_blamed(page):
+    """Total sum 20 over 2 groups cannot satisfy max 5 per group; the sum rule is blamed."""
+    setup = _gd_setup(people=_gd_ppl([5, 5, 5, 5]), groups=2, rules=[
+        {"id": "s", "type": "sum", "scope": "all", "attrId": "a-team", "min": None, "max": 5}])
+    res = _gd_run(page, setup)
+    assert res["status"] == "infeasible"
+    assert "s" in {b["ruleId"] for b in res.get("blame", [])} or res.get("reasons")
+
+
+def test_gd_sum_rule_ignores_empty_values(page):
+    """Empty integers are never counted by sum rules."""
+    people = _gd_ppl([4, 4, None, None, 4, 4])
+    setup = _gd_setup(people=people, groups=2, rules=[
+        {"id": "s", "type": "sum", "scope": "all", "attrId": "a-team", "min": 8, "max": 8}])
+    res = _gd_run(page, setup)
+    assert res["status"] == "ok"
+    assert _gd_check(setup, res["groups"]) == []
+
+
+def test_gd_scope_override_for_size_and_sum(page):
+    """A group-specific size rule overrides the all-groups size rule for that group only."""
+    people = _gd_ppl([1] * 12)
+    setup = _gd_setup(people=people, groups=3, rules=[
+        {"id": "a", "type": "size", "scope": "all", "min": 3, "max": 5},
+        {"id": "b", "type": "size", "scope": 2, "min": 6, "max": 6},
+    ])
+    for _ in range(10):
+        res = _gd_run(page, setup)
+        assert res["status"] == "ok"
+        assert len(res["groups"][2]) == 6
+        assert all(3 <= len(g) <= 5 for g in res["groups"][:2])
+        assert sorted(sum(res["groups"], [])) == sorted(p["id"] for p in people)
+
+
+def test_gd_scope_specific_group_only_rule(page):
+    """A rule scoped to one group does not constrain the others."""
+    people = [{"id": f"p{i}", "name": f"P{i}", "values": {"a-type": "manager" if i < 3 else "developer"}} for i in range(9)]
+    setup = _gd_setup(people=people, groups=3, rules=[
+        {"id": "m", "type": "count", "scope": 0, "attrId": "a-type", "value": "manager", "min": 3, "max": 3}])
+    res = _gd_run(page, setup)
+    assert res["status"] == "ok"
+    assert set(res["groups"][0]) >= {"p0", "p1", "p2"}
+
+
+def test_gd_best_effort_on_feasible_setup_is_clean(page):
+    """Best effort enabled but the setup is satisfiable: normal valid result, no warning panel."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    setup = _gd_setup(n=30, groups=5, rules=GD_RULES, best_effort=True)
+    _gd_import(page, setup)
+    groups = _gd_draw(page)
+    assert _gd_check(setup, groups) == []
+    assert page.is_hidden("#gd-alert")
+    assert "best effort" not in page.text_content("#gd-status")
+
+
+def test_gd_best_effort_sum_and_size_conflict_still_deals_everyone(page):
+    """Best effort with contradictory size rules still assigns every person exactly once."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    setup = _gd_setup(people=_gd_people(10), groups=2, best_effort=True, rules=[
+        {"id": "s", "type": "size", "scope": "all", "min": 8, "max": None}])
+    _gd_import(page, setup)
+    groups = _gd_draw(page)
+    assert sorted(sum(groups, [])) == sorted(p["id"] for p in setup["people"])
+    assert page.is_visible("#gd-alert.is-warning")
+
+
+def test_gd_history_lists_redisplays_and_caps_at_ten(page):
+    """Spec 4.4: history keeps the last 10 draws; clicking one re-displays it."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    assert page.is_hidden("#gd-history-wrap")
+    first = _gd_draw(page)
+    second = _gd_draw(page)
+    assert page.is_visible("#gd-history-wrap")
+    assert page.locator("#gd-history .gd-history-btn").count() == 2
+    # Click the oldest entry (listed last).
+    page.locator("#gd-history .gd-history-btn").last.click()
+    shown = page.evaluate(
+        "() => Array.from(document.querySelectorAll('#gd-results .gd-card'))"
+        ".map(c => Array.from(c.querySelectorAll('.gd-member')).map(li => li.dataset.personId))")
+    assert shown == first
+    page.locator("#gd-history .gd-history-btn").first.click()
+    shown = page.evaluate(
+        "() => Array.from(document.querySelectorAll('#gd-results .gd-card'))"
+        ".map(c => Array.from(c.querySelectorAll('.gd-member')).map(li => li.dataset.personId))")
+    assert shown == second
+    for _ in range(12):
+        _gd_draw(page)
+    assert page.locator("#gd-history .gd-history-btn").count() == 10
+
+
+def test_gd_reset_clears_everything(page):
+    """Spec 4.5: Reset all clears setup, results, and history (after confirm); declining keeps it."""
+    page.emulate_media(reduced_motion="reduce")
+    decisions = [False, True]
+    page.on("dialog", lambda d: d.accept() if decisions.pop(0) else d.dismiss())
+    page.click("#tab-group-draw")
+    page.click("#gd-load-example")  # empty -> no confirm needed
+    _gd_draw(page)
+    _gd_draw(page)
+    page.click("#gd-reset")  # dismissed
+    assert page.locator("#gd-people-table tbody tr").count() == 30
+    assert page.locator("#gd-results .gd-card").count() == 5
+    page.click("#gd-reset")  # accepted
+    assert page.locator("#gd-people-table tbody tr").count() == 0
+    assert page.locator(".gd-attr-row").count() == 0
+    assert page.locator(".gd-rule").count() == 0
+    assert page.locator("#gd-results .gd-card").count() == 0
+    assert page.is_hidden("#gd-history-wrap")
+    assert page.is_hidden("#gd-result-actions")
+
+
+def test_gd_editing_setup_marks_results_outdated(page):
+    """Spec 4.5: after a draw, editing the people marks the results outdated; drawing again clears it."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    _gd_draw(page)
+    assert page.is_hidden("#gd-outdated")
+    page.click("#gd-add-person")
+    assert page.is_visible("#gd-outdated")
+    _gd_draw(page)
+    assert page.is_hidden("#gd-outdated")
+
+
+def test_gd_deleting_attribute_removes_its_rules(page):
+    """Spec 4.1: deleting an attribute (confirmed) removes dependent rules and values."""
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3, rules=GD_RULES))
+    assert page.locator(".gd-rule").count() == 3
+    team_row = page.locator(".gd-attr-row[data-attr-id='a-team']")
+    team_row.locator(".gd-attr-delete").click()
+    assert page.locator(".gd-rule").count() == 2  # the keep-apart-on-team rule is gone
+    assert page.locator(".gd-rule[data-type='apart']").count() == 0
+
+
+def test_gd_import_rejects_bad_files_and_keeps_setup(page):
+    """Spec 7: wrong version / wrong shape give a readable error and leave the setup untouched."""
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    for payload, fragment in [
+        ({"version": 2, "attributes": [], "people": [], "rules": []}, "version"),
+        ({"version": 1, "attributes": []}, "Missing"),
+        ([1, 2, 3], "not a Group Draw setup"),
+    ]:
+        page.set_input_files("#gd-import-file", files=[{
+            "name": "bad.json", "mimeType": "application/json", "buffer": json.dumps(payload).encode()}])
+        page.wait_for_function(
+            "(f) => { const n = document.querySelector('#gd-io-notice');"
+            " return n.classList.contains('is-error') && n.textContent.includes(f); }",
+            arg=fragment, timeout=4000)
+        assert page.locator("#gd-people-table tbody tr").count() == 12
+
+
+def test_gd_import_declined_keeps_current_setup(page):
+    """Spec 7: import replaces the setup only after confirmation."""
+    page.on("dialog", lambda d: d.dismiss())
+    page.click("#tab-group-draw")
+    page.evaluate("() => document.querySelector('#gd-load-example').click()")  # empty -> no confirm
+    assert page.locator("#gd-people-table tbody tr").count() == 30
+    page.set_input_files("#gd-import-file", files=[{
+        "name": "s.json", "mimeType": "application/json",
+        "buffer": json.dumps(_gd_setup(n=5, groups=2)).encode()}])
+    page.wait_for_timeout(300)  # no DOM change to wait on when the confirm is dismissed
+    assert page.locator("#gd-people-table tbody tr").count() == 30
+
+
+def test_gd_export_roundtrip_preserves_rules_scopes_and_options(page):
+    """Export -> reset -> import keeps every rule type, group scope, and option exactly."""
+    _gd_open(page)
+    setup = _gd_setup(n=24, groups=4, best_effort=True, rules=[
+        {"id": "r1", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager", "min": 1, "max": 2},
+        {"id": "r2", "type": "count", "scope": 2, "attrId": "a-type", "value": "manager", "min": 0, "max": 0},
+        {"id": "r3", "type": "sum", "scope": "all", "attrId": "a-team", "min": 5, "max": 40},
+        {"id": "r4", "type": "apart", "scope": "all", "attrId": "a-type", "k": 3},
+        {"id": "r5", "type": "together", "scope": "all", "attrId": "a-team", "values": [1]},
+        {"id": "r6", "type": "size", "scope": "all", "min": 3, "max": 9},
+    ])
+    setup["groups"]["names"] = ["Red", "Blue", "Green", "Gold"]
+    setup["options"]["balance"] = False
+    _gd_import(page, setup)
+    with page.expect_download() as dl:
+        page.click("#gd-export")
+    exported = json.loads(Path(dl.value.path()).read_text())
+    assert exported["rules"] == setup["rules"]
+    assert exported["groups"]["names"] == ["Red", "Blue", "Green", "Gold"]
+    assert exported["options"] == {"balance": False, "bestEffort": True}
+    page.click("#gd-reset")
+    _gd_import(page, exported)
+    with page.expect_download() as dl2:
+        page.click("#gd-export")
+    assert json.loads(Path(dl2.value.path()).read_text()) == exported
+
+
+def test_gd_setup_autosaved_and_restored_after_reload(page):
+    """Spec 7: the setup is autosaved to localStorage and restored on reload; Clear saved data wipes it."""
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=8, groups=2))
+    page.wait_for_function("() => localStorage.getItem('groupDraw.setup.v1') !== null", timeout=4000)
+    page.reload()
+    page.click("#tab-group-draw")
+    assert page.locator("#gd-people-table tbody tr").count() == 8
+    page.click("#gd-clear-saved")
+    assert page.evaluate("() => localStorage.getItem('groupDraw.setup.v1')") is None
+
+
+def test_gd_corrupt_saved_data_is_ignored(page):
+    """Corrupt localStorage never breaks the view (and never logs a console error)."""
+    page.evaluate("() => localStorage.setItem('groupDraw.setup.v1', '{broken')")
+    page.reload()
+    page.click("#tab-group-draw")
+    assert page.locator("#gd-people-table tbody tr").count() == 0
+    page.evaluate("() => localStorage.removeItem('groupDraw.setup.v1')")
+
+
+def test_gd_keyboard_can_trigger_draw(page):
+    """The Draw button is a real focusable button operable with the keyboard."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    page.focus("#gd-draw")
+    page.keyboard.press("Enter")
+    page.wait_for_selector("#gd-results .gd-card")
+    assert page.locator("#gd-results .gd-card").count() == 3
+
+
+def test_gd_csv_escapes_formula_and_commas(page):
+    """CSV cells that start with a formula character are neutralised and commas are quoted."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    people = [{"id": "p0", "name": "=SUM(A1)", "values": {}}, {"id": "p1", "name": "Doe, Jane", "values": {}}]
+    setup = _gd_setup(people=people, groups=2)
+    setup["attributes"] = []
+    _gd_import(page, setup)
+    _gd_draw(page)
+    with page.expect_download() as dl:
+        page.click("#gd-csv")
+    text = Path(dl.value.path()).read_text()
+    assert "'=SUM(A1)" in text
+    assert '"Doe, Jane"' in text
