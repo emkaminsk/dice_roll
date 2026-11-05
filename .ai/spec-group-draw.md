@@ -213,10 +213,7 @@ caught by the hints is reported after Draw with the most likely culprit rule(s)
 
 ### 5.3 Fairness statement (to show in a tooltip / README)
 
-"Every draw uses cryptographically secure randomness. With loose rules every
-valid split is equally likely. With tight rules the search prefers any valid
-split it finds, so splits are random but not guaranteed to be perfectly
-uniform among all valid ones." — we are honest about this limitation.
+"Every draw uses cryptographically secure randomness. With no rules, or only rules a random shuffle can satisfy, every split is equally likely. When rules need searching (keep together, tight limits), splits are random but not uniform among all valid ones; the repair and best-effort fallbacks are not uniform either." — we are honest about this limitation.
 `fairness-auditor` must review that no `Math.random()` is used for outcomes and
 that candidate/group ordering uses the fair RNG.
 
