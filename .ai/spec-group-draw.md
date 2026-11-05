@@ -61,8 +61,7 @@ User adds any number of attributes. Each has:
 
 Kinds:
 
-- **label** — free text, display-only. Cannot be used in count rules (may be used
-  in output and search). Not required to be unique.
+- **label** — free text, display-only. Cannot be used in rules in v1 (shown in output only). Not required to be unique.
 - **integer** — whole number (negative allowed). Usable in count rules (treated as
   a category by value), spread rules, and optional sum rules (§4.3).
 - **category** — value must be one of the options. Usable in count and spread rules.
@@ -318,17 +317,18 @@ mechanism changes the recipe.
 - Weighted objectives (soft rule priorities), average-based rules.
 - Multiple saved setups, shareable URLs with embedded data.
 - Drag-and-drop manual adjustment of the result.
+- **Label attributes in rules** (planned follow-up phase; e.g. keep people with the same surname apart).
 - Per-attribute columns reorder, sorting/filtering in the table (nice later).
 
-## 10. Open assumptions to confirm
+## 10. Decisions
+
+Confirmed by the product owner:
 
 1. `name` is a fixed built-in field, not a custom attribute.
-2. Label attributes cannot appear in rules.
-3. Sum rule exists only for integer attributes; no average rule.
-4. "Balance" default on; group-size rules disable it.
-5. Keep-apart/together scopes are global (not per-group).
-6. Best effort weighs all violations equally.
-7. Tab switching via hash is acceptable (no router).
-8. Delivery order: feature-designer pass skipped (this spec replaces it) →
-   game-builder (solver first, then UI) → test-engineer → fairness-auditor →
-   ux-polisher.
+2. Label attributes are **not** usable in rules in v1 (parked for a later phase, see §9).
+3. Sum rules exist for integer attributes only; no average rules (not wanted).
+4. Keep-apart/together scopes are global (not per-group).
+
+Defaults adopted (not objected to): "Balance" on by default and disabled by
+group-size rules; best effort weighs all violations equally; tab switching via
+URL hash; delivery flow game-builder → test-engineer → fairness-auditor → ux-polisher.
