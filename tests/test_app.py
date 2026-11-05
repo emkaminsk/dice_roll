@@ -1473,3 +1473,128 @@ def test_gd_csv_escapes_formula_and_commas(page):
     text = Path(dl.value.path()).read_text()
     assert "'=SUM(A1)" in text
     assert '"Doe, Jane"' in text
+
+
+# --- Group Draw: label attributes in count rules (spec §4.1, §4.3) -------------
+
+def _gd_sur(surnames):
+    return [{"id": f"p{i}", "name": f"P{i}", "values": {"a-sur": s}} for i, s in enumerate(surnames)]
+
+
+SMITH_MAX1 = {"id": "rs", "type": "count", "scope": "all", "attrId": "a-sur", "value": "Smith", "min": None, "max": 1}
+
+
+def test_gd_label_count_rule_honoured_by_solver(page):
+    """A max-1 count rule on a label value is never violated over many draws, and draws still vary."""
+    people = _gd_sur(["Smith", "Smith", "Smith", "Jones", "Jones", None, "Lee", "", "Kim", "Ng", "Oh", "Wu"])
+    setup = _gd_setup(people=people, groups=3, rules=[SMITH_MAX1])
+    seen = set()
+    for _ in range(30):
+        res = _gd_run(page, setup)
+        assert res["status"] == "ok"
+        assert _gd_check(setup, res["groups"]) == []
+        seen.add(tuple(sorted(tuple(sorted(g)) for g in res["groups"])))
+    assert len(seen) >= 2
+
+
+def test_gd_label_count_rule_infeasible_is_hinted_and_blamed(page):
+    """3 Smiths, 2 groups, max 1 Smith each: live hint names the rule, strict draw fails and blames it."""
+    setup = _gd_setup(people=_gd_sur(["Smith", "Smith", "Smith", "Jones"]), groups=2, rules=[SMITH_MAX1])
+    hints = page.evaluate("s => GroupDrawSolver.validateHints(s)", setup)
+    assert any(h["level"] == "error" and "surname = Smith" in h["message"] and "rs" in h["ruleIds"] for h in hints)
+    res = _gd_run(page, setup)
+    assert res["status"] == "infeasible"
+    assert "rs" in {b["ruleId"] for b in res.get("blame", [])} or res.get("reasons")
+
+
+def test_gd_label_count_rule_exact_text_and_empty_ignored(page):
+    """Labels match exact text ("smith" is not "Smith"); empty labels never count; an empty rule value is ignored."""
+    two_each = _gd_sur(["Smith", "Smith", "smith", "smith", None, ""])
+    need_two = dict(SMITH_MAX1, min=2, max=None)
+    hints = page.evaluate("s => GroupDrawSolver.validateHints(s)", _gd_setup(people=two_each, groups=2, rules=[need_two]))
+    assert any("only 2 people have it" in h["message"] for h in hints)  # 4 if case-folded
+    # Nobody with "Smith" -> rule is a no-op warning, empties never match.
+    nobody = _gd_setup(people=_gd_sur([None, "", "Jones", "Lee"]), groups=2, rules=[dict(SMITH_MAX1, max=0)])
+    hints = page.evaluate("s => GroupDrawSolver.validateHints(s)", nobody)
+    assert [h["level"] for h in hints] == ["warning"] and "Nobody has" in hints[0]["message"]
+    assert _gd_run(page, nobody)["status"] == "ok"
+    # A rule whose value is empty is not usable and is ignored by the solver.
+    empty_rule = _gd_setup(people=_gd_sur(["Smith", "Smith"]), groups=2, rules=[dict(SMITH_MAX1, value="", max=0)])
+    assert _gd_run(page, empty_rule)["status"] == "ok"
+    assert page.evaluate("s => GroupDrawSolver.validateHints(s)", empty_rule) == []
+
+
+def test_gd_label_count_rule_in_ui(page):
+    """Labels are count-rule targets with a dropdown of distinct values that follows the table; not offered elsewhere."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(people=[], groups=2))
+    page.select_option("#gd-rule-type", "count")
+    page.select_option("#gd-rule-attr", "a-sur")
+    assert page.is_disabled("#gd-rule-add")
+    assert "add people first" in page.text_content("#gd-rule-help")
+    for name, sur in [("Ann", "Smith"), ("Bob", "Jones"), ("Cy", "Smith"), ("Di", ""), ("Ed", "Lee"), ("Flo", "Kim")]:
+        page.click("#gd-add-person")
+        row = page.locator("#gd-people-table tbody tr").last
+        row.locator("input[data-field='name']").fill(name)
+        row.locator("input[data-field='a-sur']").fill(sur)
+    opts = page.eval_on_selector_all("#gd-rule-value option", "os => os.map(o => o.value)")
+    assert opts == ["Jones", "Kim", "Lee", "Smith"]
+    assert page.is_enabled("#gd-rule-add")
+    _gd_add_rule(page, "count", "a-sur", "Smith", vmax=1)
+    assert page.text_content(".gd-rule .gd-rule-target") == "surname = Smith"
+    # The dropdown follows the table without losing the current selection.
+    page.select_option("#gd-rule-value", "Lee")
+    page.click("#gd-add-person")
+    row = page.locator("#gd-people-table tbody tr").last
+    row.locator("input[data-field='name']").fill("Gus")
+    row.locator("input[data-field='a-sur']").fill("Abe")
+    assert page.eval_on_selector_all("#gd-rule-value option", "os => os.map(o => o.value)")[0] == "Abe"
+    assert page.input_value("#gd-rule-value") == "Lee"
+    # Draw honours the rule.
+    smiths = page.evaluate("() => Array.from(document.querySelectorAll('#gd-people-table tbody tr'))"
+                           ".filter(tr => tr.querySelector(\"[data-field='a-sur']\").value === 'Smith')"
+                           ".map(tr => tr.dataset.personId)")
+    assert len(smiths) == 2
+    for _ in range(5):
+        groups = _gd_draw(page)
+        assert len(groups) == 2 and sum(len(g) for g in groups) == 7
+        assert all(sum(1 for pid in g if pid in smiths) <= 1 for g in groups)
+    # Labels are not offered for sum / keep apart / keep together.
+    for rtype in ("sum", "apart", "together"):
+        page.select_option("#gd-rule-type", rtype)
+        attrs = page.eval_on_selector_all("#gd-rule-attr option", "os => os.map(o => o.value)")
+        assert "a-sur" not in attrs
+
+
+def test_gd_label_count_rule_survives_export_import_and_autosave(page):
+    """A label count rule round-trips through export/import and autosave; label keep-apart is still rejected."""
+    _gd_open(page)
+    setup = _gd_setup(people=_gd_sur(["Smith", "Jones", "Smith", "Lee"]), groups=2, rules=[SMITH_MAX1])
+    _gd_import(page, setup)
+    assert page.text_content(".gd-rule .gd-rule-target") == "surname = Smith"
+    with page.expect_download() as dl:
+        page.click("#gd-export")
+    exported = json.loads(Path(dl.value.path()).read_text())
+    assert exported["rules"] == [SMITH_MAX1]
+    page.wait_for_function(
+        "() => (JSON.parse(localStorage.getItem('groupDraw.setup.v1') || '{}').rules || []).length === 1", timeout=4000)
+    page.reload()
+    page.click("#tab-group-draw")
+    assert page.locator(".gd-rule[data-type='count']").count() == 1
+    assert page.text_content(".gd-rule .gd-rule-target") == "surname = Smith"
+    # Keep apart on a label is out of scope: the import is refused and the setup kept.
+    bad = dict(setup, rules=[{"id": "ra", "type": "apart", "scope": "all", "attrId": "a-sur", "k": 1}])
+    page.set_input_files("#gd-import-file", files=[{
+        "name": "bad.json", "mimeType": "application/json", "buffer": json.dumps(bad).encode()}])
+    page.wait_for_function(
+        "() => document.querySelector('#gd-io-notice').classList.contains('is-error')", timeout=4000)
+    assert page.locator(".gd-rule[data-type='count']").count() == 1
+    # Blank label value in an imported count rule is refused too.
+    blank = dict(setup, rules=[dict(SMITH_MAX1, value="  ")])
+    page.evaluate("() => { document.querySelector('#gd-io-notice').classList.remove('is-error'); }")
+    page.set_input_files("#gd-import-file", files=[{
+        "name": "blank.json", "mimeType": "application/json", "buffer": json.dumps(blank).encode()}])
+    page.wait_for_function(
+        "() => document.querySelector('#gd-io-notice').classList.contains('is-error')", timeout=4000)
+    assert page.locator(".gd-rule[data-type='count']").count() == 1

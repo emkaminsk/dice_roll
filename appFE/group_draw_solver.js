@@ -65,14 +65,16 @@
     }
 
     // A rule the solver can act on: known type, valid attribute of the right
-    // kind (label attributes are display-only in v1), scope inside the groups.
+    // kind (label attributes only in count rules, exact-text match), scope
+    // inside the groups.
     function usable(rule, attrs, G) {
       if (!rule) return false;
       if (!isAllScope(rule.scope) && !(rule.scope >= 0 && rule.scope < G)) return false;
       if (rule.type === 'size') return true;
       const a = attrs[rule.attrId];
-      if (!a || a.kind === 'label') return false;
+      if (!a) return false;
       if (rule.type === 'count') return keyOf(rule.value) !== null;
+      if (a.kind === 'label') return false;
       if (rule.type === 'sum') return a.kind === 'integer';
       return rule.type === 'apart' || rule.type === 'together';
     }

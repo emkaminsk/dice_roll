@@ -1200,6 +1200,8 @@ select.form-control:focus-visible { outline: none; }
 .gd-field-wide { flex: 1 1 200px; }
 .gd-field-num { width: 76px; }
 .gd-field-action { justify-content: flex-end; }
+/* Label values are free text: keep long ones from stretching the rule form. */
+#gd-rule-value { max-width: 14rem; text-overflow: ellipsis; }
 .gd-check {
   display: inline-flex;
   align-items: center;

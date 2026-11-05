@@ -61,7 +61,7 @@ User adds any number of attributes. Each has:
 
 Kinds:
 
-- **label** — free text, display-only. Cannot be used in rules in v1 (shown in output only). Not required to be unique.
+- **label** — free text, display-only. Usable in **count rules only** (exact-text match, empty ignored; the rule's value is picked from the values present in the data). Not usable in sum, keep-apart or keep-together rules. Not required to be unique.
 - **integer** — whole number (negative allowed). Usable in count rules (treated as
   a category by value), spread rules, and optional sum rules (§4.3).
 - **category** — value must be one of the options. Usable in count and spread rules.
@@ -107,9 +107,11 @@ Rule types:
 
 1. **Group size** — `min` and `max` people in the group. Default (no rule):
    sizes as equal as possible (differ by at most 1) — see "Balance" option below.
-2. **Count rule** — for `attribute = value` (category option, or an integer value):
-   `min` and `max` number of such people in the group. Either bound may be blank.
-   Example: `type = manager`: min 1, max 2, scope All groups.
+2. **Count rule** — for `attribute = value` (category option, integer value, or a
+   label value picked from the values present in the data — exact-text match,
+   empty labels never count): `min` and `max` number of such people in the group.
+   Either bound may be blank. Examples: `type = manager`: min 1, max 2, scope All
+   groups; `surname = Smith`: max 1.
 3. **Sum rule (integer attributes only)** — min/max of the *sum* of the attribute
    within a group. (Average is deliberately not offered in v1: it is awkward with
    varying group sizes.)
@@ -284,6 +286,8 @@ fixture already fails on console errors). Pure-solver tests via
 4. Rules: count/size/sum/apart/together can be created; scope all vs one group;
    override works; live hints appear for impossible setups (the 5×2-vs-7
    consultants example).
+   Label attributes appear as count-rule targets (value dropdown of distinct
+   values present) but not for sum/apart/together.
 5. Draw (strict): every person appears in exactly one group; all rules satisfied
    (verified independently in the test by recomputing from the DOM output);
    running Draw 50× on a solvable setup never violates a rule.
@@ -314,7 +318,7 @@ mechanism changes the recipe.
 - Weighted objectives (soft rule priorities), average-based rules.
 - Multiple saved setups, shareable URLs with embedded data.
 - Drag-and-drop manual adjustment of the result.
-- **Label attributes in rules** (planned follow-up phase; e.g. keep people with the same surname apart).
+- **True keep apart / keep together on label attributes** (next phase; e.g. no two people with the same surname in a group). Label attributes already support count rules (§4.3).
 - Per-attribute columns reorder, sorting/filtering in the table (nice later).
 
 ## 10. Decisions
@@ -322,7 +326,7 @@ mechanism changes the recipe.
 Confirmed by the product owner:
 
 1. `name` is a fixed built-in field, not a custom attribute.
-2. Label attributes are **not** usable in rules in v1 (parked for a later phase, see §9).
+2. Label attributes are usable in count rules only; keep apart/together on labels is parked for the next phase (see §9).
 3. Sum rules exist for integer attributes only; no average rules (not wanted).
 4. Keep-apart/together scopes are global (not per-group).
 

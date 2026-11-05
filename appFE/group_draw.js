@@ -208,12 +208,12 @@
     const rule = { id: typeof r.id === 'string' && r.id ? r.id : uid('r'), type: r.type };
     if (r.type === 'size') return Object.assign(rule, { scope, min: num(r.min), max: num(r.max) });
     const attr = attributes.find((a) => a.id === r.attrId);
-    if (!attr || attr.kind === 'label') return null;
+    if (!attr || (attr.kind === 'label' && r.type !== 'count')) return null;
     rule.attrId = attr.id;
     if (r.type === 'sum') return attr.kind === 'integer' ? Object.assign(rule, { scope, min: num(r.min), max: num(r.max) }) : null;
     if (r.type === 'count') {
       const value = cleanValue(attr, r.value);
-      return value === null ? null : Object.assign(rule, { scope, value, min: num(r.min), max: num(r.max) });
+      return value === null || (attr.kind === 'label' && !value.trim()) ? null : Object.assign(rule, { scope, value, min: num(r.min), max: num(r.max) });
     }
     if (r.type === 'apart') return Object.assign(rule, { scope: 'all', k: Math.max(1, num(r.k) || 1) });
     const values = Array.isArray(r.values) ? r.values.map((v) => cleanValue(attr, v)).filter((v) => v !== null) : [];
@@ -228,7 +228,7 @@
     scheduleSave();
     if (o.table) renderTable();
     if (o.attrs) renderAttributes();
-    if (o.rules) { renderRuleForm(); renderRules(); }
+    if (o.rules) { renderRuleForm(); renderRules(); } else renderValueField();
     if (o.groups) renderGroups();
     renderPeopleMeta();
     renderHints();
@@ -795,6 +795,7 @@
   function ruleAttrs(type) {
     if (type === 'sum') return state.attributes.filter((a) => a.kind === 'integer');
     if (type === 'size') return [];
+    if (type === 'count') return state.attributes;
     return state.attributes.filter((a) => a.kind !== 'label');
   }
 
@@ -819,29 +820,68 @@
     els.ruleAttr.innerHTML = '';
     attrs.forEach((a) => els.ruleAttr.appendChild(el('option', { value: a.id, text: `${a.name} (${KIND_LABEL[a.kind].toLowerCase()})` })));
     if (attrs.some((a) => a.id === prev)) els.ruleAttr.value = prev;
-    renderValueField();
     renderScopeOptions();
-    const needsAttr = type !== 'size';
-    const missing = needsAttr && !attrs.length;
-    els.ruleAdd.disabled = missing;
-    els.ruleHelp.textContent = missing
-      ? (type === 'sum' ? 'Add a number attribute first.' : 'Add a category or number attribute first (labels are display-only).')
-      : {
-        count: 'How many people with this value each group may have.',
-        size: 'How many people a group may have.',
-        sum: 'Bounds on the total of a number within a group.',
-        apart: 'No more than this many people sharing a value in one group (1 = all different).',
-        together: 'Everyone sharing a value lands in the same group.',
-      }[type];
+    renderValueField();
   }
 
+  const RULE_HELP = {
+    count: 'How many people with this value each group may have.',
+    size: 'How many people a group may have.',
+    sum: 'Bounds on the total of a number within a group.',
+    apart: 'No more than this many people sharing a value in one group (1 = all different).',
+    together: 'Everyone sharing a value lands in the same group.',
+  };
+
+  // Distinct non-empty values of a label attribute, verbatim (rules match exact text).
+  function labelValues(attr) {
+    const seen = Object.create(null);
+    namedPeople().forEach((p) => {
+      const v = p.values[attr.id];
+      if (!isEmptyValue(v)) seen[String(v)] = true;
+    });
+    return Object.keys(seen).sort((x, y) => x.localeCompare(y));
+  }
+
+  // Values that only differ by case or spacing look alike in the dropdown but never match.
+  function lookAlikes(values) {
+    const seen = Object.create(null);
+    return values.some((v) => {
+      const k = v.trim().toLowerCase();
+      if (seen[k]) return true;
+      seen[k] = true;
+      return false;
+    });
+  }
+
+  // Fills the value picker for the chosen attribute and sets Add/help accordingly.
+  // Called on every change so label values track the people table.
   function renderValueField() {
-    const a = attrById(els.ruleAttr.value);
-    const isNum = a && a.kind === 'integer';
+    const type = els.ruleType.value;
+    const a = type === 'size' ? null : attrById(els.ruleAttr.value);
+    const isNum = !!a && a.kind === 'integer';
+    const prev = els.ruleValue.value;
     els.ruleValue.hidden = isNum;
     els.ruleValueNum.hidden = !isNum;
     els.ruleValue.innerHTML = '';
-    if (a && a.kind === 'category') a.options.forEach((o) => els.ruleValue.appendChild(el('option', { value: o, text: o })));
+    const values = !a || isNum ? [] : (a.kind === 'category' ? a.options : labelValues(a));
+    values.forEach((o) => els.ruleValue.appendChild(el('option', { value: o, text: o })));
+    if (values.indexOf(prev) !== -1) els.ruleValue.value = prev;
+    const noLabels = type === 'count' && !!a && a.kind === 'label' && !values.length;
+    const missing = type !== 'size' && !ruleAttrs(type).length;
+    if (noLabels) els.ruleValue.appendChild(el('option', { value: '', text: 'No values yet' }));
+    els.ruleValue.disabled = noLabels;
+    els.ruleAdd.disabled = missing || noLabels;
+    if (missing) {
+      els.ruleHelp.textContent = type === 'sum' ? 'Add a number attribute first.'
+        : type === 'count' ? 'Add an attribute first.'
+          : 'Add a category or number attribute first (labels work in count rules only).';
+    } else if (noLabels) {
+      els.ruleHelp.textContent = `No ${a.name} values yet — add people first.`;
+    } else if (type === 'count' && a && a.kind === 'label') {
+      els.ruleHelp.textContent = `${RULE_HELP.count} Labels match exact text${lookAlikes(values) ? ' — some values differ only by case or spaces' : ''}.`;
+    } else {
+      els.ruleHelp.textContent = RULE_HELP[type];
+    }
   }
 
   els.ruleType.addEventListener('change', () => { els.ruleError.textContent = ''; renderRuleForm(); });
