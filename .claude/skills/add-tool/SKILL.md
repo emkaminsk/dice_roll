@@ -27,7 +27,8 @@ back-end, fair RNG only.
 ## 2. Markup: a tool-card section in index.html
 
 - Add a `<section class="tool-card" aria-labelledby="<id>-title">` inside
-  `<div class="tools-grid">`, with an emoji + `<h2>` title matching the existing style
+  `<div class="tools-grid">` (which lives in the default `#quick-tools-view` tab panel;
+  a whole new *view* gets its own tab in `.view-tabs` + panel, see `view_tabs.js`), with an emoji + `<h2>` title matching the existing style
   (`🎲 Roll the dice`, `🎡 Spin the wheel`).
 - Reuse existing classes: `form-group`, `btn btn-primary`, `btn-row`, `result-line`,
   `narrow-input`. Results go in a `<p class="result-line" id="<tool>-result">`.

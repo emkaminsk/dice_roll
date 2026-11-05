@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dice Roll &amp; Random Picker</title>
-    <meta name="description" content="A lightweight set of fair, in-browser random tools: roll a dice, pick a random option, and spin the wheel.">
+    <meta name="description" content="A lightweight set of fair, in-browser random tools: roll dice, spin the wheel, split teams, and draw rule-based groups.">
     <link rel="icon" href="favicon.ico">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest">
@@ -25,6 +25,15 @@
     </header>
 
     <main class="container">
+      <nav class="view-tabs" role="tablist" aria-label="Views">
+        <button type="button" class="view-tab" role="tab" id="tab-quick-tools"
+          aria-controls="quick-tools-view" aria-selected="true">🎲 Quick Tools</button>
+        <button type="button" class="view-tab" role="tab" id="tab-group-draw"
+          aria-controls="group-draw-view" aria-selected="false" tabindex="-1"
+          data-hash="group-draw">🧩 Group Draw</button>
+      </nav>
+
+      <div id="quick-tools-view" class="view-panel" role="tabpanel" aria-labelledby="tab-quick-tools">
       <div class="tools-grid">
         <!-- Dice Roller -->
         <section class="tool-card" aria-labelledby="dice-title">
@@ -205,6 +214,195 @@
         </div>
         <div id="picker-sections" class="picker-grid"></div>
       </section>
+      </div>
+
+      <div id="group-draw-view" class="view-panel gd-view" role="tabpanel" aria-labelledby="tab-group-draw" hidden>
+        <section class="tool-card gd-intro" aria-labelledby="gd-title">
+          <div class="gd-intro-head">
+            <div>
+              <h2 id="gd-title">🧩 Group Draw</h2>
+              <p class="gd-lede">Split people into groups at random — with your own rules.</p>
+            </div>
+            <div class="gd-setup-actions">
+              <button type="button" id="gd-load-example" class="btn btn-outline-secondary btn-sm">Load example</button>
+              <button type="button" id="gd-import" class="btn btn-outline-secondary btn-sm">Import JSON</button>
+              <input type="file" id="gd-import-file" accept=".json,application/json" hidden>
+              <button type="button" id="gd-export" class="btn btn-outline-secondary btn-sm">Export JSON</button>
+              <button type="button" id="gd-reset" class="btn btn-outline-secondary btn-sm">Reset all</button>
+            </div>
+          </div>
+          <ol class="gd-stepper" aria-label="Steps">
+            <li><div class="gd-stepper-link" data-step="attrs"><span class="gd-step-num">1</span><span class="gd-stepper-text">Attributes<small id="gd-meta-attrs"></small></span></div></li>
+            <li><div class="gd-stepper-link" data-step="people"><span class="gd-step-num">2</span><span class="gd-stepper-text">People<small id="gd-meta-people"></small></span></div></li>
+            <li><div class="gd-stepper-link" data-step="rules"><span class="gd-step-num">3</span><span class="gd-stepper-text">Rules<small id="gd-meta-rules"></small></span></div></li>
+            <li><div class="gd-stepper-link" data-step="draw"><span class="gd-step-num">4</span><span class="gd-stepper-text">Draw<small id="gd-meta-draw"></small></span></div></li>
+          </ol>
+          <p class="gd-privacy muted">🔒 Stays in this browser. Nothing is uploaded.
+            <button type="button" id="gd-clear-saved" class="btn btn-link gd-inline-link">Clear saved data</button></p>
+          <p id="gd-io-notice" class="gd-notice" role="status" hidden></p>
+        </section>
+
+        <section class="tool-card gd-step" id="gd-step-attrs" aria-labelledby="gd-attrs-title">
+          <h2 id="gd-attrs-title"><span class="gd-step-num">1</span> Attributes</h2>
+          <p class="gd-help muted">Optional. Describe your people — e.g. <em>team</em> (number) or <em>role</em> (category). Everyone also has a name.</p>
+          <div id="gd-attr-list" class="gd-attr-list"></div>
+          <form id="gd-attr-form" class="gd-attr-form" novalidate>
+            <div class="gd-field">
+              <label for="gd-attr-name">Attribute name</label>
+              <input type="text" id="gd-attr-name" class="form-control form-control-sm" placeholder="e.g. team" autocomplete="off">
+            </div>
+            <div class="gd-field">
+              <label for="gd-attr-kind">Kind</label>
+              <select id="gd-attr-kind" class="form-control form-control-sm">
+                <option value="category">Category (pick from options)</option>
+                <option value="integer">Number (whole)</option>
+                <option value="label">Label (free text, display only)</option>
+              </select>
+            </div>
+            <div class="gd-field gd-field-wide" id="gd-attr-options-field">
+              <label for="gd-attr-options">Options (comma-separated)</label>
+              <input type="text" id="gd-attr-options" class="form-control form-control-sm" placeholder="consultant, developer, manager" autocomplete="off">
+            </div>
+            <div class="gd-field gd-field-action">
+              <button type="submit" id="gd-attr-add" class="btn btn-primary btn-sm">Add attribute</button>
+            </div>
+            <p id="gd-attr-error" class="gd-field-error" role="alert"></p>
+          </form>
+        </section>
+
+        <section class="tool-card gd-step" id="gd-step-people" aria-labelledby="gd-people-title">
+          <h2 id="gd-people-title"><span class="gd-step-num">2</span> People</h2>
+          <div class="gd-people-head">
+            <p id="gd-people-count" class="gd-count">0 people</p>
+            <p id="gd-people-summary" class="gd-summary muted"></p>
+          </div>
+          <p id="gd-people-empty" class="gd-empty muted">No people yet — add rows, paste from a spreadsheet, or load the example.</p>
+          <div class="gd-table-wrap" id="gd-table-wrap">
+            <table id="gd-people-table" class="gd-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="gd-add-person" class="btn btn-primary btn-sm">Add person</button>
+            <button type="button" id="gd-paste-toggle" class="btn btn-outline-secondary btn-sm" aria-expanded="false" aria-controls="gd-paste">Paste from spreadsheet…</button>
+          </div>
+          <div id="gd-paste" class="gd-paste" hidden>
+            <label for="gd-paste-text">Paste rows — tab, comma or semicolon separated. A header row (name, team, …) is optional.</label>
+            <textarea id="gd-paste-text" class="form-control" rows="5" placeholder="name,team,type&#10;Ada,1,manager&#10;Ben,2,consultant"></textarea>
+            <div class="btn-row">
+              <button type="button" id="gd-paste-preview" class="btn btn-primary btn-sm">Preview</button>
+              <button type="button" id="gd-paste-cancel" class="btn btn-outline-secondary btn-sm">Cancel</button>
+            </div>
+            <div id="gd-paste-result" class="gd-paste-result"></div>
+          </div>
+        </section>
+
+        <section class="tool-card gd-step" id="gd-step-rules" aria-labelledby="gd-rules-title">
+          <h2 id="gd-rules-title"><span class="gd-step-num">3</span> Groups &amp; rules</h2>
+          <div class="gd-groups-row">
+            <div class="gd-field">
+              <label for="gd-group-count">Number of groups</label>
+              <input type="number" id="gd-group-count" class="form-control form-control-sm narrow-input" min="2" max="50" value="2">
+            </div>
+            <div class="gd-options">
+              <label class="gd-check"><input type="checkbox" id="gd-balance" checked> Balance group sizes</label>
+              <label class="gd-check"><input type="checkbox" id="gd-best-effort"> Allow best effort</label>
+            </div>
+          </div>
+          <p id="gd-balance-note" class="gd-help muted" hidden>Group-size rules are set, so they decide sizes (balance is off).</p>
+          <fieldset class="gd-group-names">
+            <legend>Group names</legend>
+            <div id="gd-group-names" class="gd-group-name-list"></div>
+          </fieldset>
+
+          <h3 class="gd-subhead">Rules</h3>
+          <p id="gd-rules-empty" class="gd-help muted">No rules yet — every split is allowed.</p>
+          <ul id="gd-rule-list" class="gd-rule-list"></ul>
+          <p id="gd-rules-notice" class="gd-notice" role="status" hidden></p>
+
+          <form id="gd-rule-form" class="gd-rule-form" novalidate>
+            <div class="gd-field">
+              <label for="gd-rule-type">Rule</label>
+              <select id="gd-rule-type" class="form-control form-control-sm">
+                <option value="count">Count of a value</option>
+                <option value="size">Group size</option>
+                <option value="sum">Sum of a number</option>
+                <option value="apart">Keep apart</option>
+                <option value="together">Keep together</option>
+              </select>
+            </div>
+            <div class="gd-field" data-for="count sum apart together">
+              <label for="gd-rule-attr">Attribute</label>
+              <select id="gd-rule-attr" class="form-control form-control-sm"></select>
+            </div>
+            <div class="gd-field" data-for="count">
+              <label for="gd-rule-value">Value</label>
+              <select id="gd-rule-value" class="form-control form-control-sm"></select>
+              <input type="text" id="gd-rule-value-num" class="form-control form-control-sm" inputmode="numeric" placeholder="e.g. 3" hidden aria-label="Value">
+            </div>
+            <div class="gd-field gd-field-wide" data-for="together">
+              <label for="gd-rule-values">Only these values (optional)</label>
+              <input type="text" id="gd-rule-values" class="form-control form-control-sm" placeholder="blank = every value" autocomplete="off">
+            </div>
+            <div class="gd-field gd-field-num" data-for="size count sum">
+              <label for="gd-rule-min">Min</label>
+              <input type="text" id="gd-rule-min" class="form-control form-control-sm" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="gd-field gd-field-num" data-for="size count sum">
+              <label for="gd-rule-max">Max</label>
+              <input type="text" id="gd-rule-max" class="form-control form-control-sm" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="gd-field gd-field-num" data-for="apart">
+              <label for="gd-rule-k">At most</label>
+              <input type="text" id="gd-rule-k" class="form-control form-control-sm" inputmode="numeric" value="1" autocomplete="off">
+            </div>
+            <div class="gd-field" data-for="size count sum">
+              <label for="gd-rule-scope">Applies to</label>
+              <select id="gd-rule-scope" class="form-control form-control-sm"></select>
+            </div>
+            <div class="gd-field gd-field-action">
+              <button type="submit" id="gd-rule-add" class="btn btn-primary btn-sm">Add rule</button>
+            </div>
+            <p id="gd-rule-help" class="gd-help muted gd-rule-help"></p>
+            <p id="gd-rule-error" class="gd-field-error" role="alert"></p>
+          </form>
+
+          <ul id="gd-hints" class="gd-hints" aria-live="polite"></ul>
+        </section>
+
+        <section class="tool-card gd-step" id="gd-step-draw" aria-labelledby="gd-draw-title">
+          <h2 id="gd-draw-title"><span class="gd-step-num">4</span> Draw</h2>
+          <div class="gd-draw-bar">
+            <button type="button" id="gd-draw" class="btn btn-primary gd-draw-btn">
+              <span class="gd-deck" aria-hidden="true"><span></span><span></span><span></span></span>
+              <span id="gd-draw-label">Draw</span>
+            </button>
+            <button type="button" id="gd-cancel" class="btn btn-outline-secondary btn-sm" hidden>Cancel</button>
+            <label class="gd-check gd-show-attrs"><input type="checkbox" id="gd-show-attrs"> Show attributes</label>
+          </div>
+          <p id="gd-status" class="result-line" aria-live="polite"></p>
+          <div id="gd-alert" class="gd-alert" hidden></div>
+          <div id="gd-results-wrap" class="gd-results-wrap">
+            <p id="gd-outdated" class="gd-outdated" hidden>Setup changed since this draw — press Draw again to refresh.</p>
+            <div id="gd-results" class="team-results gd-results"></div>
+          </div>
+          <div id="gd-result-actions" class="btn-row" hidden>
+            <button type="button" id="gd-copy" class="btn btn-outline-secondary btn-sm">Copy as text</button>
+            <button type="button" id="gd-csv" class="btn btn-outline-secondary btn-sm">Download CSV</button>
+          </div>
+          <div id="gd-copy-fallback" class="gd-copy-fallback" hidden>
+            <label for="gd-copy-text">Copy the result from here:</label>
+            <textarea id="gd-copy-text" class="form-control" rows="6" readonly></textarea>
+          </div>
+          <div id="gd-history-wrap" class="gd-history-wrap" hidden>
+            <h3 class="gd-subhead">This session</h3>
+            <ol id="gd-history" class="gd-history"></ol>
+          </div>
+          <p class="gd-fair muted" title="Every draw uses cryptographically secure randomness. With no rules, or only rules a random shuffle can satisfy, every split is equally likely. When rules need searching (keep together, tight limits), splits are random but not uniform among all valid ones; the repair and best-effort fallbacks are not uniform either.">
+            🎲 Fair draw: cryptographically secure randomness. With no rules, or rules a shuffle can satisfy, every split is equally likely; when rules need searching (e.g. keep together, tight limits) splits are random but not uniform.</p>
+        </section>
+      </div>
     </main>
 
     <footer class="page-footer">
@@ -224,5 +422,9 @@
     <script src="lottery.js"></script>
     <script src="data/fortunes.js"></script>
     <script src="fortune_cookie.js"></script>
+    <script src="view_tabs.js"></script>
+    <script src="data/group_draw_example.js"></script>
+    <script src="group_draw_solver.js"></script>
+    <script src="group_draw.js"></script>
   </body>
 </html>

@@ -2,7 +2,8 @@
 
 A lightweight, browser-based collection of fair random-selection tools. No login, no
 installation, nothing stored — reload the page to start fresh. It bundles nine
-independent tools on a single page:
+independent quick tools on one tab, plus a rule-based **Group Draw** view on a second
+tab (linkable as `#group-draw`):
 
 - **🎲 Dice Roller** — roll one or several dice with any number of sides; see each
   die and the total.
@@ -18,6 +19,11 @@ independent tools on a single page:
   plus six "lucky numbers" (unique, from 1..69). Both are chosen fairly up front; the
   crack is pure decoration. For entertainment only.
 - **🎯 Random Picker** — enter options and draw one at random; add as many independent picker sections as you like.
+- **🧩 Group Draw** (second tab) — define people with custom attributes, then draw them
+  into groups under per-group rules (size, counts, sums, keep apart/together). Strict
+  mode explains impossible setups; "best effort" returns the closest split. Setups can
+  be pasted, imported/exported as JSON, and are autosaved in this browser only. Full
+  behaviour, algorithm and fairness notes: [`.ai/spec-group-draw.md`](.ai/spec-group-draw.md).
 
 All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
 for uniform, unbiased results. The wheel is rendered on a `<canvas>` with
@@ -100,7 +106,7 @@ server-side code. See [`.ai/tech-stack.md`](.ai/tech-stack.md) for the rationale
 
 ```
 appFE/
-  index.html         # single page, nine tools
+  index.html         # single page: Quick Tools tab (nine tools) + Group Draw tab
   style.css          # modern-clean custom theme
   random.js          # shared uniform RNG (crypto.getRandomValues)
   celebration.js     # full-screen winner overlay + confetti (used by the wheel)
@@ -113,9 +119,13 @@ appFE/
   team_splitter.js   # team splitter — Fisher–Yates shuffle + round-robin dealing
   lottery.js         # lucky numbers — unique k-combination draw with a ball reveal
   fortune_cookie.js  # fortune cookie — crack animation, fortune + lucky numbers reveal
+  view_tabs.js       # Quick Tools / Group Draw view switcher (URL hash, arrow keys)
+  group_draw_solver.js # Group Draw solver — pure, DOM-free (window.GroupDrawSolver)
+  group_draw.js      # Group Draw UI — editors, paste/import, Worker draw, reveal, history
   data/              # content datasets for content-driven tools
     eightball.js     # the 20 classic Magic 8-Ball answers (EIGHTBALL_ANSWERS)
     fortunes.js      # the fortune-cookie fortunes (FORTUNES)
+    group_draw_example.js # "Load example" setup for Group Draw (GROUP_DRAW_EXAMPLE)
 tests/
   test_app.py        # Playwright end-to-end tests
 ```
