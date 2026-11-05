@@ -597,3 +597,513 @@ def test_eightball_does_not_disturb_other_tools(page):
     )
     page.locator(".picker-section .btn-primary").first.click()
     assert page.text_content(".picker-section .result-line").strip() != ""
+
+
+# --- Group Draw (spec: .ai/spec-group-draw.md §8) ---------------------------
+
+import json
+import time
+
+
+def _gd_people(n, teams=6, types=("consultant", "developer", "manager")):
+    """n people with a team number and a type (half consultants, a quarter managers)."""
+    people = []
+    for i in range(n):
+        kind = types[2] if i % 4 == 3 else types[i % 2]
+        people.append({
+            "id": f"p{i}", "name": f"Person {i}",
+            "values": {"a-team": (i % teams) + 1, "a-type": kind},
+        })
+    return people
+
+
+def _gd_setup(n=30, groups=5, rules=None, best_effort=False, teams=6, people=None):
+    return {
+        "version": 1,
+        "attributes": [
+            {"id": "a-sur", "name": "surname", "kind": "label"},
+            {"id": "a-team", "name": "team", "kind": "integer"},
+            {"id": "a-type", "name": "type", "kind": "category",
+             "options": ["consultant", "developer", "manager"]},
+        ],
+        "people": people if people is not None else _gd_people(n, teams),
+        "groups": {"count": groups, "names": []},
+        "rules": rules or [],
+        "options": {"balance": True, "bestEffort": best_effort},
+    }
+
+
+GD_RULES = [
+    {"id": "r1", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager", "min": 1, "max": 2},
+    {"id": "r2", "type": "count", "scope": "all", "attrId": "a-type", "value": "consultant", "min": 2, "max": None},
+    {"id": "r3", "type": "apart", "scope": "all", "attrId": "a-team", "k": 2},
+]
+
+
+def _gd_open(page, auto_accept=True):
+    if auto_accept:
+        page.on("dialog", lambda d: d.accept())
+    page.click("#tab-group-draw")
+    page.wait_for_selector("#group-draw-view:not([hidden])")
+
+
+def _gd_import(page, setup):
+    page.set_input_files("#gd-import-file", files=[{
+        "name": "setup.json", "mimeType": "application/json",
+        "buffer": json.dumps(setup).encode(),
+    }])
+    page.wait_for_function(
+        "() => document.querySelector('#gd-io-notice').textContent.includes('mported')",
+        timeout=4000,
+    )
+
+
+def _gd_draw(page, timeout=15000):
+    """Click Draw and wait for a new result or a failure panel; return groups of person ids."""
+    before = page.get_attribute("#gd-results", "data-draw-no")
+    page.click("#gd-draw")
+    page.wait_for_function(
+        """(before) => { const r = document.querySelector('#gd-results');
+             const btn = document.querySelector('#gd-draw');
+             return !btn.disabled && (r.dataset.drawNo !== (before || undefined)
+               || !document.querySelector('#gd-alert').hidden); }""",
+        arg=before, timeout=timeout,
+    )
+    return page.evaluate(
+        "() => Array.from(document.querySelectorAll('#gd-results .gd-card'))"
+        ".map(c => Array.from(c.querySelectorAll('.gd-member')).map(li => li.dataset.personId))"
+    )
+
+
+def _gd_check(setup, groups):
+    """Independently recompute every rule from a result; return a list of problems."""
+    people = {p["id"]: p for p in setup["people"]}
+    problems = []
+    seen = [pid for g in groups for pid in g]
+    if sorted(seen) != sorted(people):
+        problems.append("not every person exactly once")
+    n, G = len(people), setup["groups"]["count"]
+    for gi, ids in enumerate(groups):
+        vals = [people[i]["values"] for i in ids]
+        if not any(r["type"] == "size" for r in setup["rules"]):
+            if not (n // G <= len(ids) <= -(-n // G)):
+                problems.append(f"group {gi} unbalanced: {len(ids)}")
+        for r in setup["rules"]:
+            if r.get("scope", "all") not in ("all", gi):
+                continue
+            if r["type"] == "count":
+                c = sum(1 for v in vals if v.get(r["attrId"]) == r["value"])
+            elif r["type"] == "size":
+                c = len(ids)
+            elif r["type"] == "sum":
+                c = sum(v.get(r["attrId"]) or 0 for v in vals)
+            else:
+                c = None
+            if c is not None:
+                if r.get("min") is not None and c < r["min"]:
+                    problems.append(f"group {gi}: {r['id']} below min ({c})")
+                if r.get("max") is not None and c > r["max"]:
+                    problems.append(f"group {gi}: {r['id']} above max ({c})")
+            if r["type"] == "apart":
+                from collections import Counter
+                cnt = Counter(v.get(r["attrId"]) for v in vals if v.get(r["attrId"]) is not None)
+                if cnt and max(cnt.values()) > r["k"]:
+                    problems.append(f"group {gi}: apart violated {cnt}")
+    for r in setup["rules"]:
+        if r["type"] == "together":
+            where = {}
+            for gi, ids in enumerate(groups):
+                for i in ids:
+                    v = people[i]["values"].get(r["attrId"])
+                    if v is not None and (not r.get("values") or v in r["values"]):
+                        where.setdefault(v, set()).add(gi)
+            if any(len(s) > 1 for s in where.values()):
+                problems.append(f"together split: {where}")
+    return problems
+
+
+def test_gd_tabs_default_switch_and_hash(page, server):
+    """Quick tools show by default; the Group Draw tab swaps views; #group-draw links directly."""
+    assert page.is_visible("#quick-tools-view")
+    assert page.is_hidden("#group-draw-view")
+    page.click("#tab-group-draw")
+    assert page.is_hidden("#quick-tools-view")
+    assert page.is_visible("#group-draw-view")
+    assert page.evaluate("location.hash") == "#group-draw"
+    assert page.get_attribute("#tab-group-draw", "aria-selected") == "true"
+    # Keyboard: arrow key moves back to Quick tools.
+    page.focus("#tab-group-draw")
+    page.keyboard.press("ArrowLeft")
+    assert page.is_visible("#quick-tools-view")
+    assert page.get_attribute("#tab-quick-tools", "aria-selected") == "true"
+    # Direct link opens the view.
+    page.goto(server + "#group-draw")
+    page.wait_for_load_state("networkidle")
+    assert page.is_visible("#group-draw-view")
+    assert page.is_hidden("#quick-tools-view")
+
+
+def test_gd_tab_switch_keeps_state(page):
+    """Switching tabs never resets either view."""
+    page.fill("#max", "12")
+    _gd_open(page)
+    page.click("#gd-load-example")
+    page.click("#tab-quick-tools")
+    assert page.input_value("#max") == "12"
+    page.click("#tab-group-draw")
+    assert page.locator("#gd-people-table tbody tr").count() == 30
+
+
+def test_gd_attributes_add_validate_delete(page):
+    """Label/integer/category attributes; category needs options; duplicates rejected; delete-in-use confirms."""
+    answers = []  # True = accept the next confirm, False = dismiss
+    asked = []
+    page.on("dialog", lambda d: (asked.append(d.message), d.accept() if answers.pop(0) else d.dismiss()))
+    _gd_open(page, auto_accept=False)
+    for name, kind, opts in [("surname", "label", ""), ("team", "integer", ""), ("type", "category", "dev, ops")]:
+        page.fill("#gd-attr-name", name)
+        page.select_option("#gd-attr-kind", kind)
+        if kind == "category":
+            page.fill("#gd-attr-options", opts)
+        page.click("#gd-attr-add")
+    assert page.locator(".gd-attr-row").count() == 3
+    assert page.locator(".gd-attr-row .gd-chip").count() == 2
+
+    page.fill("#gd-attr-name", "role")
+    page.select_option("#gd-attr-kind", "category")
+    page.fill("#gd-attr-options", "")
+    page.click("#gd-attr-add")
+    assert "at least one option" in page.text_content("#gd-attr-error")
+    assert page.locator(".gd-attr-row").count() == 3
+
+    page.fill("#gd-attr-name", "TEAM")
+    page.select_option("#gd-attr-kind", "integer")
+    page.click("#gd-attr-add")
+    assert "already an attribute" in page.text_content("#gd-attr-error")
+    assert page.locator(".gd-attr-row").count() == 3
+
+    # Give someone a team, then deleting "team" asks first.
+    page.click("#gd-add-person")
+    row = page.locator("#gd-people-table tbody tr").first
+    row.locator("input[data-field='name']").fill("Ann")
+    row.locator("td[data-kind='integer'] input").fill("3")
+    answers.append(False)
+    page.locator(".gd-attr-row").nth(1).locator(".gd-attr-delete").click()
+    assert asked and "team" in asked[0]
+    assert page.locator(".gd-attr-row").count() == 3  # dismissed → kept
+    answers.append(True)
+    page.locator(".gd-attr-row").nth(1).locator(".gd-attr-delete").click()
+    assert page.locator(".gd-attr-row").count() == 2
+    headers = page.eval_on_selector_all("#gd-people-table thead th", "ths => ths.map(t => t.textContent)")
+    assert "team" not in headers and "type" in headers
+
+
+def test_gd_people_table_add_edit_delete(page):
+    """Rows can be added, edited (with inline integer validation) and deleted; duplicates are flagged."""
+    _gd_open(page)
+    _gd_import(page, _gd_setup(people=[]))
+    for name in ["Ann", "Bob", "Ann"]:
+        page.click("#gd-add-person")
+        page.locator("#gd-people-table tbody tr").last.locator("input[data-field='name']").fill(name)
+    assert "3 people" in page.text_content("#gd-people-count")
+    assert page.locator("#gd-people-table td.is-duplicate").count() == 2
+    team = page.locator("#gd-people-table tbody tr").nth(1).locator("input[data-field='a-team']")
+    team.fill("abc")
+    assert page.locator("#gd-people-table td.is-invalid").count() == 1
+    team.fill("4")
+    assert page.locator("#gd-people-table td.is-invalid").count() == 0
+    page.locator("#gd-people-table tbody tr").nth(2).locator(".gd-person-delete").click()
+    assert "2 people" in page.text_content("#gd-people-count")
+    assert page.locator("#gd-people-table td.is-duplicate").count() == 0
+
+
+def test_gd_paste_with_header_reports_problems(page):
+    """TSV with a header maps by name; bad integers and unknown categories are reported before import."""
+    _gd_open(page)
+    _gd_import(page, _gd_setup(people=[]))
+    page.click("#gd-paste-toggle")
+    page.fill("#gd-paste-text", "type\tname\tteam\nmanager\tAnn\t1\nintern\tBob\tx7\ndeveloper\tCy\t2")
+    page.click("#gd-paste-preview")
+    issues = page.text_content("#gd-paste-result")
+    assert "not a whole number" in issues and "x7" in issues
+    assert "intern" in issues
+    assert page.locator("#gd-people-table tbody tr").count() == 0  # nothing imported yet
+    page.check(".gd-unknown input[value='empty']")
+    page.click("#gd-paste-import")
+    rows = page.locator("#gd-people-table tbody tr")
+    assert rows.count() == 3
+    bob = rows.nth(1)
+    assert bob.locator("input[data-field='name']").input_value() == "Bob"
+    assert bob.locator("input[data-field='a-team']").input_value() == ""
+    assert bob.locator("select[data-field='a-type']").input_value() == ""
+    assert rows.nth(0).locator("select[data-field='a-type']").input_value() == "manager"
+
+
+def test_gd_paste_without_header_by_position(page):
+    """CSV without a header maps columns by position (name, then attributes in order)."""
+    _gd_open(page)
+    _gd_import(page, _gd_setup(people=[]))
+    page.click("#gd-paste-toggle")
+    page.fill("#gd-paste-text", "Ann,Smith,3,manager\nBob,Jones,4,lead")
+    page.click("#gd-paste-preview")
+    assert "lead" in page.text_content("#gd-paste-result")
+    page.click("#gd-paste-import")  # default: add unknown values as new options
+    rows = page.locator("#gd-people-table tbody tr")
+    assert rows.count() == 2
+    assert rows.nth(0).locator("input[data-field='a-team']").input_value() == "3"
+    assert rows.nth(1).locator("select[data-field='a-type']").input_value() == "lead"
+    assert page.locator(".gd-attr-row .gd-chip", has_text="lead").count() == 1
+
+
+def _gd_add_rule(page, rtype, attr=None, value=None, vmin=None, vmax=None, k=None, scope=None, values=None):
+    page.select_option("#gd-rule-type", rtype)
+    if attr:
+        page.select_option("#gd-rule-attr", attr)
+    if value is not None:
+        if page.is_visible("#gd-rule-value-num"):
+            page.fill("#gd-rule-value-num", str(value))
+        else:
+            page.select_option("#gd-rule-value", value)
+    if rtype in ("size", "count", "sum"):
+        page.fill("#gd-rule-min", "" if vmin is None else str(vmin))
+        page.fill("#gd-rule-max", "" if vmax is None else str(vmax))
+        page.select_option("#gd-rule-scope", scope or "all")
+    if k is not None:
+        page.fill("#gd-rule-k", str(k))
+    if values is not None:
+        page.fill("#gd-rule-values", values)
+    page.click("#gd-rule-add")
+
+
+def test_gd_rules_created_scoped_and_hinted(page):
+    """All rule types can be added; a group-specific rule is marked as an override; impossible mins are hinted."""
+    _gd_open(page)
+    people = _gd_people(20)
+    # Exactly 7 consultants.
+    for i, p in enumerate(people):
+        p["values"]["a-type"] = "consultant" if i < 7 else "developer"
+    _gd_import(page, _gd_setup(people=people, groups=5))
+    _gd_add_rule(page, "count", "a-type", "consultant", vmin=2)
+    hints = page.text_content("#gd-hints")
+    assert "5 groups × min 2" in hints and "only 7" in hints
+    assert page.locator(".gd-rule.is-error").count() == 1
+    _gd_add_rule(page, "count", "a-type", "consultant", vmin=1, scope="0")
+    assert page.locator(".gd-rule").nth(1).locator(".gd-badge").count() == 1
+    _gd_add_rule(page, "size", vmin=3, vmax=5)
+    assert page.is_disabled("#gd-balance")
+    _gd_add_rule(page, "sum", "a-team", vmax=40)
+    _gd_add_rule(page, "apart", "a-team", k=2)
+    _gd_add_rule(page, "together", "a-team", values="1")
+    types = page.eval_on_selector_all(".gd-rule", "els => els.map(e => e.dataset.type)")
+    assert types == ["count", "count", "size", "sum", "apart", "together"]
+
+
+def test_gd_override_rule_wins_for_its_group(page):
+    """A specific-group rule overrides the all-groups rule for the same target."""
+    setup = _gd_setup(n=12, groups=3, rules=[
+        {"id": "a", "type": "count", "scope": "all", "attrId": "a-type", "value": "consultant", "min": None, "max": 0},
+        {"id": "b", "type": "count", "scope": 1, "attrId": "a-type", "value": "consultant", "min": 0, "max": None},
+    ])
+    for i, p in enumerate(setup["people"]):
+        p["values"]["a-type"] = "consultant" if i < 3 else "developer"
+    groups = page.evaluate("s => GroupDrawSolver.solve(s).groups", setup)
+    consultants = {p["id"] for p in setup["people"] if p["values"]["a-type"] == "consultant"}
+    assert consultants <= set(groups[1])
+
+
+def test_gd_strict_draw_50_times_never_violates(page):
+    """Every person exactly once and all rules hold, over 50 UI draws (checked independently)."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    setup = _gd_setup(n=30, groups=5, rules=GD_RULES)
+    _gd_import(page, setup)
+    for _ in range(50):
+        groups = _gd_draw(page)
+        assert len(groups) == 5
+        assert _gd_check(setup, groups) == []
+    assert "Drew 5 groups" in page.text_content("#gd-status")
+
+
+def test_gd_draw_again_varies(page):
+    """Repeated draws produce different splits (≥ 2 distinct in 20)."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3, rules=GD_RULES[:1]))
+    seen = {tuple(tuple(sorted(g)) for g in _gd_draw(page)) for _ in range(20)}
+    assert len(seen) >= 2
+
+
+def test_gd_infeasible_strict_shows_error_and_blame(page):
+    """An impossible setup in strict mode shows an error panel naming rules to blame, and no cards."""
+    _gd_open(page)
+    people = _gd_people(10)
+    for i, p in enumerate(people):
+        p["values"]["a-type"] = "manager" if i < 2 else "developer"
+    _gd_import(page, _gd_setup(people=people, groups=2, rules=[
+        {"id": "x", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager", "min": 2, "max": None},
+    ]))
+    _gd_draw(page)
+    assert page.is_visible("#gd-alert.is-error")
+    text = page.text_content("#gd-alert")
+    assert "can’t all be met" in text
+    assert "Dropping" in text and "manager" in text
+    assert page.locator("#gd-results .gd-card").count() == 0
+
+
+def test_gd_infeasible_hidden_conflict_is_explained(page):
+    """Infeasibility the hints can't see is proven by search and blamed on a rule."""
+    people = [{"id": f"p{i}", "name": f"P{i}", "values": {"a-type": "manager" if i < 2 else "developer"}} for i in range(4)]
+    setup = _gd_setup(people=people, groups=2, rules=[
+        {"id": "t", "type": "together", "scope": "all", "attrId": "a-type", "values": ["manager"]},
+        {"id": "c", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager", "min": 1, "max": None},
+    ])
+    res = page.evaluate("s => GroupDrawSolver.run(s)", setup)
+    assert res["status"] == "infeasible"
+    assert {b["ruleId"] for b in res["blame"]} == {"t", "c"}
+
+
+def test_gd_best_effort_shows_cards_and_violations(page):
+    """Best effort on an impossible setup still deals cards and lists violated rules."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    people = _gd_people(10)
+    for i, p in enumerate(people):
+        p["values"]["a-type"] = "manager" if i < 2 else "developer"
+    _gd_import(page, _gd_setup(people=people, groups=2, best_effort=True, rules=[
+        {"id": "x", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager", "min": 2, "max": None},
+    ]))
+    groups = _gd_draw(page)
+    assert len(groups) == 2 and sorted(sum(groups, [])) == sorted(p["id"] for p in people)
+    assert page.is_visible("#gd-alert.is-warning")
+    assert page.locator("#gd-alert li").count() >= 1
+    assert "best effort" in page.text_content("#gd-status")
+
+
+def test_gd_keep_together_and_apart(page):
+    """Keep-together blocks stay in one group; keep-apart k=1 separates same-value people."""
+    together = _gd_setup(n=24, groups=4, teams=6, rules=[
+        {"id": "t", "type": "together", "scope": "all", "attrId": "a-team", "values": [1, 2]},
+    ])
+    apart = _gd_setup(n=20, groups=5, teams=4, rules=[
+        {"id": "a", "type": "apart", "scope": "all", "attrId": "a-team", "k": 1},
+    ])
+    for setup in (together, apart):
+        for _ in range(10):
+            res = page.evaluate("s => GroupDrawSolver.run(s)", setup)
+            assert res["status"] == "ok"
+            assert _gd_check(setup, res["groups"]) == []
+
+
+def test_gd_solver_uniformity_smoke(page):
+    """No rules, 3 people into 3 groups: each person lands in each group ~1/3 of the time."""
+    counts = page.evaluate("""() => {
+        const s = { attributes: [], groups: { count: 3, names: [] }, rules: [], options: { balance: true },
+                    people: [0, 1, 2].map(i => ({ id: 'p' + i, name: 'P' + i, values: {} })) };
+        const c = {};
+        for (let t = 0; t < 10000; t++) {
+            GroupDrawSolver.solve(s).groups.forEach((ids, g) => ids.forEach(id => { c[id + ':' + g] = (c[id + ':' + g] || 0) + 1; }));
+        }
+        return c;
+    }""")
+    assert len(counts) == 9
+    for v in counts.values():
+        assert abs(v / 10000 - 1 / 3) < 0.05
+
+
+def test_gd_export_reset_import_roundtrip(page):
+    """Export → reset → import restores the identical setup; invalid JSON shows an error."""
+    _gd_open(page)
+    page.click("#gd-load-example")
+    with page.expect_download() as dl:
+        page.click("#gd-export")
+    exported = json.loads(Path(dl.value.path()).read_text())
+    page.click("#gd-reset")
+    assert page.locator("#gd-people-table tbody tr").count() == 0
+    _gd_import(page, exported)
+    with page.expect_download() as dl2:
+        page.click("#gd-export")
+    assert json.loads(Path(dl2.value.path()).read_text()) == exported
+    assert page.locator("#gd-people-table tbody tr").count() == 30
+
+    page.set_input_files("#gd-import-file", files=[{"name": "bad.json", "mimeType": "application/json", "buffer": b"{not json"}])
+    page.wait_for_selector("#gd-io-notice.is-error")
+    assert "not valid JSON" in page.text_content("#gd-io-notice")
+    assert page.locator("#gd-people-table tbody tr").count() == 30
+
+
+def test_gd_performance_200_people(page):
+    """200 people, 10 groups, 4 rules solves in under 2 seconds."""
+    people = _gd_people(200, teams=25)
+    for i, p in enumerate(people):
+        p["values"]["a-type"] = "manager" if i % 13 == 0 else ("consultant" if i % 10 < 3 else "developer")
+    setup = _gd_setup(people=people, groups=10, rules=GD_RULES[:2] + [
+        {"id": "r3", "type": "apart", "scope": "all", "attrId": "a-team", "k": 1},
+        {"id": "r4", "type": "sum", "scope": "all", "attrId": "a-team", "min": 200, "max": 320},
+    ])
+    out = page.evaluate("""s => { const t = performance.now(); const r = GroupDrawSolver.run(s);
+                                   return { r, ms: performance.now() - t }; }""", setup)
+    assert out["r"]["status"] == "ok"
+    assert out["ms"] < 2000
+    assert _gd_check(setup, out["r"]["groups"]) == []
+
+
+def test_gd_copy_text_and_csv_contain_everyone_once(page):
+    """Copy-as-text and CSV list every person exactly once."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    page.click("#gd-load-example")
+    _gd_draw(page)
+    page.evaluate("() => { navigator.clipboard.writeText = t => { window.__copied = t; return Promise.resolve(); }; }")
+    page.click("#gd-copy")
+    text = page.evaluate("() => window.__copied")
+    names = [line[2:] for line in text.splitlines() if line.startswith("- ")]
+    example = page.evaluate("() => GROUP_DRAW_EXAMPLE.people.map(p => p.name)")
+    assert sorted(names) == sorted(example)
+    with page.expect_download() as dl:
+        page.click("#gd-csv")
+    lines = Path(dl.value.path()).read_text().strip().splitlines()
+    assert lines[0] == "group,name,surname,team,type"
+    assert sorted(l.split(",")[1] for l in lines[1:]) == sorted(example)
+
+
+def test_gd_mobile_no_horizontal_scroll(page):
+    """At 375px the page doesn't scroll sideways; the people table scrolls inside its own box."""
+    page.set_viewport_size({"width": 375, "height": 800})
+    _gd_open(page)
+    page.click("#gd-load-example")
+    _gd_draw(page)
+    assert page.evaluate("document.documentElement.scrollWidth") <= 375
+    wrap = page.eval_on_selector("#gd-table-wrap", "e => [getComputedStyle(e).overflowX, e.clientWidth]")
+    assert wrap[0] == "auto" and wrap[1] <= 375
+    page.fill("#gd-people-table tbody tr:first-child input[data-field='name']", "Ada B.")
+    assert page.input_value("#gd-people-table tbody tr:first-child input[data-field='name']") == "Ada B."
+
+
+def test_gd_reduced_motion_renders_instantly(page):
+    """With reduced motion, results appear without reveal animations."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    page.click("#gd-load-example")
+    start = time.time()
+    _gd_draw(page)
+    assert time.time() - start < 3
+    assert page.locator("#gd-results .gd-card").count() == 5
+    assert page.locator("#gd-results .is-dealt, #gd-results .is-popping").count() == 0
+    assert not page.evaluate("document.querySelector('#gd-draw').classList.contains('is-dealing')")
+
+
+def test_gd_does_not_disturb_other_tools(page):
+    """Running Group Draw leaves the quick tools' inputs and results alone."""
+    page.fill("#max", "20")
+    page.fill("#team-names", "Ann\nBob\nCy")
+    page.fill("#wheel-names", "Alice\nBob")
+    _gd_open(page)
+    page.click("#gd-load-example")
+    _gd_draw(page)
+    page.click("#tab-quick-tools")
+    assert page.input_value("#max") == "20"
+    assert page.input_value("#team-names") == "Ann\nBob\nCy"
+    assert page.input_value("#wheel-names") == "Alice\nBob"
+    assert page.locator("#team-results .team-card").count() == 0
+    page.click("form[name='Dice'] button[type=submit]")
+    assert 1 <= _rolled_value(page) <= 20

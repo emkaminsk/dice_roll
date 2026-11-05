@@ -42,6 +42,10 @@ Order within a tier is the suggested build order. Check items off as they ship.
 - [x] **Lottery numbers** — draw k unique numbers from 1..N (presets for common
   lotteries), with a ball-machine style reveal.
 
+- [x] **Group Draw** — a separate view (tab) for drawing people with custom attributes
+  into groups under per-group rules (size, count, sum, keep apart/together), strict or
+  best effort. Spec: [`.ai/spec-group-draw.md`](.ai/spec-group-draw.md).
+
 ## Tier 3 — fortune telling (content-heavy, high engagement)
 
 - [ ] **Horoscope** — pick your zodiac sign (or birth date), get today's playful
