@@ -19,14 +19,11 @@ tab (linkable as `#group-draw`):
   plus six "lucky numbers" (unique, from 1..69). Both are chosen fairly up front; the
   crack is pure decoration. For entertainment only.
 - **🎯 Random Picker** — enter options and draw one at random; add as many independent picker sections as you like.
-- **🧩 Group Draw** (second tab) — define people with custom attributes (label,
-  number, category), then draw them into N groups under per-group rules: group size,
-  count of a value, sum of a number, keep apart, keep together. Strict mode explains
-  impossible setups (and which rule to drop); "best effort" returns the closest split
-  and lists violations. Paste from a spreadsheet, import/export JSON, copy/CSV results,
-  session history. The setup is autosaved in this browser only. With loose rules every
-  valid split is equally likely; with tight rules the search still draws randomly but
-  isn't guaranteed perfectly uniform.
+- **🧩 Group Draw** (second tab) — define people with custom attributes, then draw them
+  into groups under per-group rules (size, counts, sums, keep apart/together). Strict
+  mode explains impossible setups; "best effort" returns the closest split. Setups can
+  be pasted, imported/exported as JSON, and are autosaved in this browser only. Full
+  behaviour, algorithm and fairness notes: [`.ai/spec-group-draw.md`](.ai/spec-group-draw.md).
 
 All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
 for uniform, unbiased results. The wheel is rendered on a `<canvas>` with
