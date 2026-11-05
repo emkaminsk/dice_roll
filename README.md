@@ -106,7 +106,7 @@ server-side code. See [`.ai/tech-stack.md`](.ai/tech-stack.md) for the rationale
 
 ```
 appFE/
-  index.html         # single page: Quick tools tab (nine tools) + Group Draw tab
+  index.html         # single page: Quick Tools tab (nine tools) + Group Draw tab
   style.css          # modern-clean custom theme
   random.js          # shared uniform RNG (crypto.getRandomValues)
   celebration.js     # full-screen winner overlay + confetti (used by the wheel)
@@ -119,7 +119,7 @@ appFE/
   team_splitter.js   # team splitter — Fisher–Yates shuffle + round-robin dealing
   lottery.js         # lucky numbers — unique k-combination draw with a ball reveal
   fortune_cookie.js  # fortune cookie — crack animation, fortune + lucky numbers reveal
-  view_tabs.js       # Quick tools / Group Draw view switcher (URL hash, arrow keys)
+  view_tabs.js       # Quick Tools / Group Draw view switcher (URL hash, arrow keys)
   group_draw_solver.js # Group Draw solver — pure, DOM-free (window.GroupDrawSolver)
   group_draw.js      # Group Draw UI — editors, paste/import, Worker draw, reveal, history
   data/              # content datasets for content-driven tools

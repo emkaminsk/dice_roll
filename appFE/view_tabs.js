@@ -1,4 +1,4 @@
-// Top-level view switcher (Quick tools / Group Draw). Pure show/hide — no view
+// Top-level view switcher (Quick Tools / Group Draw). Pure show/hide — no view
 // is re-rendered or reset by switching. The selected view lives in the URL hash
 // (#group-draw) so it can be linked; no hash means the default first tab.
 (function () {

@@ -1171,7 +1171,6 @@ select.form-control:focus-visible { outline: none; }
   text-decoration: none !important;
   transition: border-color var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard);
 }
-.gd-stepper-link:hover { border-color: var(--accent); color: var(--ink); }
 .gd-stepper-text { display: flex; flex-direction: column; line-height: 1.2; font-weight: 600; font-size: 0.9rem; min-width: 0; }
 .gd-stepper-text small { color: var(--muted); font-weight: 500; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gd-step-num {
@@ -1551,13 +1550,11 @@ select.form-control:focus-visible { outline: none; }
 /* Long best-effort violation lists scroll instead of pushing the groups off-screen. */
 .gd-alert ul { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; }
 /* Visible keyboard focus on the custom controls. */
-.gd-stepper-link:focus-visible,
 .gd-inline-link:focus-visible,
 .gd-check input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.gd-stepper-link:active { transform: scale(0.98); }
 /* A little lift for the result: the headline pulses once as the groups land. */
 .gd-card { transition: box-shadow var(--dur-base) var(--ease-standard); }
 .gd-results .gd-card:hover { box-shadow: var(--shadow-hover); }
@@ -1575,7 +1572,6 @@ select.form-control:focus-visible { outline: none; }
   .gd-view .btn-sm, .gd-view .form-control-sm, .gd-view select.form-control-sm { min-height: 44px; }
   .gd-view .gd-check { min-height: 44px; }
   .gd-view .gd-check input { width: 20px; height: 20px; }
-  .gd-stepper-link { min-height: 48px; }
   .gd-setup-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
   .gd-rule-delete, .gd-attr-delete { min-width: 44px; min-height: 44px; }
   .gd-rule-delete { margin-left: auto; }
@@ -1667,4 +1663,33 @@ body > .home-link > a {
     .home-link i {
         font-size: 1.2rem;
     }
+}
+
+/* Group Draw dropdowns: readable in light and dark, including the highlighted
+   option (native popups otherwise flip to white-on-white). */
+.gd-view select,
+.gd-view select.form-control {
+  background-color: var(--surface);
+  color: var(--ink);
+  color-scheme: light dark;
+}
+.gd-view select option {
+  background-color: var(--surface);
+  color: var(--ink);
+}
+.gd-view select option:checked,
+.gd-view select option:hover,
+.gd-view select option:focus {
+  background-color: var(--accent);
+  background-image: linear-gradient(var(--accent), var(--accent));
+  color: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  .gd-view select option:checked,
+  .gd-view select option:hover,
+  .gd-view select option:focus {
+    background-color: #4f46e5;
+    background-image: linear-gradient(#4f46e5, #4f46e5);
+    color: #fff;
+  }
 }
