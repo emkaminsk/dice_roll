@@ -1121,6 +1121,8 @@ self.onmessage = function (e) {
 
   function showStatus(text, highlight) {
     els.status.textContent = '';
+    els.status.classList.remove('is-fresh');
+    if (!reduceMotion()) { void els.status.offsetWidth; els.status.classList.add('is-fresh'); }
     if (highlight) {
       const m = text.match(/^(Drew )(\d+)( .*)$/);
       if (m) {
