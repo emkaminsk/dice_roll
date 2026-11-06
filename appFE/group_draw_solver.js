@@ -57,11 +57,21 @@
     function groupName(setup, g) {
       const names = (setup.groups && setup.groups.names) || [];
       const name = names[g] && String(names[g]).trim();
-      return name || `Group ${g + 1}`;
+      const word = String((setup.groups && setup.groups.label) || '').trim() || 'Group';
+      return name || `${word} ${g + 1}`;
     }
 
     function isAllScope(scope) {
       return scope === 'all' || scope === undefined || scope === null;
+    }
+
+    // A scope is 'all', one group index, or an array of group indexes.
+    function scopeList(scope) {
+      return Array.isArray(scope) ? scope : [scope];
+    }
+
+    function scopeHas(scope, g) {
+      return scopeList(scope).indexOf(g) !== -1;
     }
 
     // A rule the solver can act on: known type, valid attribute of the right
@@ -69,7 +79,10 @@
     // inside the groups.
     function usable(rule, attrs, G) {
       if (!rule) return false;
-      if (!isAllScope(rule.scope) && !(rule.scope >= 0 && rule.scope < G)) return false;
+      if (!isAllScope(rule.scope)) {
+        const list = scopeList(rule.scope);
+        if (!list.length || !list.every((g) => Number.isInteger(g) && g >= 0 && g < G)) return false;
+      }
       if (rule.type === 'size') return true;
       const a = attrs[rule.attrId];
       if (!a) return false;
@@ -91,7 +104,7 @@
     function describeRule(rule, setup) {
       const a = attrMap(setup)[rule.attrId];
       const an = a ? a.name : '?';
-      const scope = isAllScope(rule.scope) ? 'each group' : groupName(setup, rule.scope);
+      const scope = isAllScope(rule.scope) ? 'each group' : scopeList(rule.scope).map((g) => groupName(setup, g)).join(', ');
       const r = rangeText(rule.min, rule.max);
       switch (rule.type) {
         case 'size': return `Group size ${r} (${scope})`;
@@ -127,7 +140,7 @@
         for (let g = 0; g < G; g++) apply(r, g);
       });
       for (let g = 0; g < G; g++) {
-        const own = list.filter((r) => !isAllScope(r.scope) && r.scope === g);
+        const own = list.filter((r) => !isAllScope(r.scope) && scopeHas(r.scope, g));
         if (!own.length) continue;
         out.min[g] = dMin; out.max[g] = dMax;
         out.minSrc[g] = null; out.maxSrc[g] = null;
@@ -851,7 +864,7 @@
     }
 
     return {
-      normalizeRules, validateHints, solve, bestEffort, evaluate, run, blame, describeRule,
+      normalizeRules, validateHints, scopeHas, solve, bestEffort, evaluate, run, blame, describeRule,
     };
   }
 

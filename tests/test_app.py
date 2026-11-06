@@ -689,7 +689,8 @@ def _gd_check(setup, groups):
             if not (n // G <= len(ids) <= -(-n // G)):
                 problems.append(f"group {gi} unbalanced: {len(ids)}")
         for r in setup["rules"]:
-            if r.get("scope", "all") not in ("all", gi):
+            sc = r.get("scope", "all")
+            if sc != "all" and gi not in (sc if isinstance(sc, list) else [sc]):
                 continue
             if r["type"] == "count":
                 c = sum(1 for v in vals if v.get(r["attrId"]) == r["value"])
@@ -855,6 +856,21 @@ def test_gd_paste_without_header_by_position(page):
     assert page.locator(".gd-attr-row .gd-chip", has_text="lead").count() == 1
 
 
+def _gd_set_scope(page, scope):
+    """Drive the multi-select 'Applies to' picker: None/'all', a group index (str/int) or a list of them."""
+    if scope in (None, "all"):
+        return
+    wanted = [int(g) for g in (scope if isinstance(scope, list) else [scope])]
+    picker = page.locator("#gd-rule-scope details")
+    picker.locator("summary").click()
+    picker.locator(".gd-scope-all").uncheck()  # leaves group 1 ticked
+    for g in wanted:
+        picker.locator(f"input[data-group='{g}']").check()
+    if 0 not in wanted:
+        picker.locator("input[data-group='0']").uncheck()
+    picker.locator("summary").click()
+
+
 def _gd_add_rule(page, rtype, attr=None, value=None, vmin=None, vmax=None, k=None, scope=None, values=None):
     page.select_option("#gd-rule-type", rtype)
     if attr:
@@ -867,7 +883,7 @@ def _gd_add_rule(page, rtype, attr=None, value=None, vmin=None, vmax=None, k=Non
     if rtype in ("size", "count", "sum"):
         page.fill("#gd-rule-min", "" if vmin is None else str(vmin))
         page.fill("#gd-rule-max", "" if vmax is None else str(vmax))
-        page.select_option("#gd-rule-scope", scope or "all")
+        _gd_set_scope(page, scope)
     if k is not None:
         page.fill("#gd-rule-k", str(k))
     if values is not None:
@@ -1598,3 +1614,132 @@ def test_gd_label_count_rule_survives_export_import_and_autosave(page):
     page.wait_for_function(
         "() => document.querySelector('#gd-io-notice').classList.contains('is-error')", timeout=4000)
     assert page.locator(".gd-rule[data-type='count']").count() == 1
+
+
+def test_gd_rule_scope_multi_select_in_form_and_list(page):
+    """A rule can apply to several groups (1,2,3 of 6); the list shows and edits them; all ticked = All."""
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=30, groups=6))
+    _gd_add_rule(page, "size", vmin=4, vmax=6, scope=[0, 1, 2])
+    summary = page.locator(".gd-rule .gd-scope-summary")
+    assert summary.text_content().strip() == "Group 1, Group 2, Group 3"
+    # Tick group 4 in the list: still a subset, and the picker stays open.
+    summary.click()
+    page.locator(".gd-rule .gd-scope input[data-group='3']").check()
+    assert summary.text_content().strip() == "Group 1, Group 2, Group 3, Group 4"
+    page.wait_for_function(
+        "() => { const s = localStorage.getItem('groupDraw.setup.v1'); "
+        "return s && JSON.stringify(JSON.parse(s).rules[0].scope) === '[0,1,2,3]'; }", timeout=4000)
+    # Ticking everything collapses to All groups; the last group can't be unticked to nothing.
+    page.locator(".gd-rule .gd-scope input[data-group='4']").check()
+    page.locator(".gd-rule .gd-scope input[data-group='5']").check()
+    assert summary.text_content().strip() == "All groups (each)"
+    assert page.locator(".gd-rule .gd-scope-all").is_checked()
+
+
+def test_gd_multi_group_scope_applies_to_each_listed_group(page):
+    """Solver: a rule scoped to groups [0,1] constrains those two and leaves the rest free."""
+    people = [{"id": f"p{i}", "name": f"P{i}", "values": {"a-type": "manager" if i < 4 else "developer"}} for i in range(12)]
+    setup = _gd_setup(people=people, groups=4, rules=[
+        {"id": "m", "type": "count", "scope": [0, 1], "attrId": "a-type", "value": "manager", "min": 2, "max": 2}])
+    for _ in range(5):
+        res = _gd_run(page, setup)
+        assert res["status"] == "ok"
+        assert _gd_check(setup, res["groups"]) == []
+        for g in (0, 1):
+            assert sum(1 for i in res["groups"][g] if i in {"p0", "p1", "p2", "p3"}) == 2
+    # Invalid scopes are ignored by the solver (out of range / empty).
+    bad = _gd_setup(people=people, groups=4, rules=[
+        {"id": "m", "type": "count", "scope": [0, 9], "attrId": "a-type", "value": "manager", "min": 5, "max": None}])
+    assert _gd_run(page, bad)["status"] == "ok"
+
+
+def test_gd_multi_group_scope_survives_export_import_and_group_shrink(page):
+    """Array scopes round-trip through import; shrinking the group count trims or drops them."""
+    _gd_open(page)
+    setup = _gd_setup(n=30, groups=6, rules=[
+        {"id": "a", "type": "size", "scope": [1, 2, 5], "min": 3, "max": 6},
+        {"id": "b", "type": "size", "scope": [4, 5], "min": 3, "max": 6}])
+    _gd_import(page, setup)
+    assert [t.strip() for t in page.locator(".gd-scope-summary").all_text_contents() if "Group 2" in t] \
+        == ["Group 2, Group 3, Group 6"]
+    page.fill("#gd-group-count", "4")
+    page.press("#gd-group-count", "Tab")
+    texts = [t.strip() for t in page.locator(".gd-rule .gd-scope-summary").all_text_contents()]
+    assert texts == ["Group 2, Group 3"]  # rule b only covered removed groups
+
+
+def _gd_card_ids(page):
+    return page.evaluate(
+        "() => Array.from(document.querySelectorAll('#gd-results .gd-card'))"
+        ".map(c => Array.from(c.querySelectorAll('.gd-member')).map(m => m.dataset.personId))")
+
+
+def test_gd_partial_redraw_keeps_ticked_groups_and_redraws_the_rest(page):
+    """Partial redraw: kept groups are untouched, everyone else is redrawn among the other groups, rules still hold."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    setup = _gd_setup(n=30, groups=5, rules=GD_RULES)
+    _gd_import(page, setup)
+    assert page.is_disabled("#gd-partial")  # nothing drawn yet
+    first = _gd_draw(page)
+    assert page.is_enabled("#gd-partial")
+    page.check("#gd-partial")
+    page.check("#gd-results .gd-card[data-group='1'] .gd-keep input")
+    page.check("#gd-results .gd-card[data-group='3'] .gd-keep input")
+    again = _gd_draw(page)
+    assert sorted(again[1]) == sorted(first[1]) and sorted(again[3]) == sorted(first[3])
+    assert sorted(sum(again, [])) == sorted(sum(first, []))
+    assert sorted(sum((again[g] for g in (0, 2, 4)), [])) == sorted(sum((first[g] for g in (0, 2, 4)), []))
+    assert _gd_check(setup, again) == []
+    assert "Redrew 3 groups, kept 2" in page.text_content("#gd-status")
+    # Over many draws the unticked groups actually change.
+    changed = False
+    for _ in range(6):
+        nxt = _gd_draw(page)
+        assert sorted(nxt[1]) == sorted(first[1]) and sorted(nxt[3]) == sorted(first[3])
+        changed = changed or any(sorted(nxt[g]) != sorted(first[g]) for g in (0, 2, 4))
+    assert changed
+
+
+def test_gd_partial_redraw_guards(page):
+    """All groups kept blocks the draw; unticking Partial redraw does a full draw; editing the setup disables it."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    _gd_draw(page)
+    page.check("#gd-partial")
+    for g in range(3):
+        page.check(f"#gd-results .gd-card[data-group='{g}'] .gd-keep input")
+    assert page.is_disabled("#gd-draw")
+    assert "untick" in page.text_content("#gd-partial-hint").lower()
+    page.uncheck("#gd-results .gd-card[data-group='0'] .gd-keep input")
+    assert page.is_enabled("#gd-draw")
+    page.uncheck("#gd-partial")
+    assert page.is_enabled("#gd-draw")
+    # Changing the setup makes the shown draw stale: partial redraw is no longer offered.
+    page.fill("#gd-group-count", "4")
+    page.press("#gd-group-count", "Tab")
+    assert page.is_disabled("#gd-partial") and not page.is_checked("#gd-partial")
+
+
+def test_gd_group_word_used_in_results_copy_csv_and_rules(page):
+    """A custom group word ('Pokój') replaces 'Group' in results, copied text, CSV, scope picker; it persists via export/import."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    page.fill("#gd-group-word", "Pokój")
+    assert page.get_attribute("#gd-group-names input", "placeholder") == "Pokój 1"
+    _gd_draw(page)
+    names = page.eval_on_selector_all("#gd-results .gd-card-name", "els => els.map(e => e.textContent)")
+    assert names == ["Pokój 1", "Pokój 2", "Pokój 3"]
+    page.evaluate("() => { navigator.clipboard.writeText = t => { window.__copied = t; return Promise.resolve(); }; }")
+    page.click("#gd-copy")
+    assert page.evaluate("() => window.__copied").startswith("Pokój 1 (4): ")
+    with page.expect_download() as dl:
+        page.click("#gd-csv")
+    assert Path(dl.value.path()).read_text().splitlines()[1].startswith("Pokój 1,")
+    _gd_add_rule(page, "size", vmin=2, scope=[0, 1])
+    assert page.locator(".gd-rule .gd-scope-summary").text_content().strip() == "Pokój 1, Pokój 2"
+    assert page.evaluate("() => GroupDrawSolver.describeRule({type:'size',scope:[0,1],min:2}, {groups:{count:3,label:'Pokój',names:[]}})") \
+        == "Group size at least 2 (Pokój 1, Pokój 2)"

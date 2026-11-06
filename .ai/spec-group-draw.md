@@ -100,8 +100,15 @@ renameable. The draw always assigns **every person to exactly one group**.
 
 **Rules** are *per group* (decision from the product owner). UI model: a rules
 table with a **scope** column — `All groups` (default; applies to every group
-individually) or one specific group. A specific-group rule *overrides* an
-all-groups rule for the same (attribute, value) target in that group.
+individually), one specific group, or several groups picked with checkboxes
+(e.g. 1, 2, 3 of 6). A specific-group rule *overrides* an all-groups rule for the
+same (attribute, value) target in each group it names.
+
+**Partial redraw** (step 4): with "Partial redraw" ticked, each result card gets a
+🔒 Keep checkbox. "Draw again" then leaves the kept groups untouched and redraws
+only the people in the other groups among those groups (rules remapped to them).
+The merged result is re-checked against the full setup. Only offered while the
+shown draw matches the current setup.
 
 Rule types:
 
@@ -251,7 +258,7 @@ State shape (in-memory single object):
   people:     [{ id, name, values: { [attrId]: string|number|null } }],
   groups:     { count, names: string[] },
   rules:      [{ id, type: 'size'|'count'|'sum'|'apart'|'together',
-                 scope: 'all'|groupIndex, attrId?, value?, min?, max?, k? }],
+                 scope: 'all'|groupIndex|groupIndex[], attrId?, value?, min?, max?, k? }],
   options:    { balance: true, bestEffort: false },
   results:    [/* history */]
 }
