@@ -37,6 +37,7 @@
     ruleValue: $('#gd-rule-value'), ruleValueNum: $('#gd-rule-value-num'), ruleValues: $('#gd-rule-values'),
     ruleMin: $('#gd-rule-min'), ruleMax: $('#gd-rule-max'), ruleK: $('#gd-rule-k'), ruleScope: $('#gd-rule-scope'),
     ruleAdd: $('#gd-rule-add'), ruleHelp: $('#gd-rule-help'), ruleError: $('#gd-rule-error'), hints: $('#gd-hints'),
+    partial: $('#gd-partial'), partialWrap: $('#gd-partial-wrap'), partialHint: $('#gd-partial-hint'),
     draw: $('#gd-draw'), drawLabel: $('#gd-draw-label'), cancel: $('#gd-cancel'), showAttrs: $('#gd-show-attrs'),
     status: $('#gd-status'), alert: $('#gd-alert'), resultsWrap: $('#gd-results-wrap'), outdated: $('#gd-outdated'),
     results: $('#gd-results'), actions: $('#gd-result-actions'), copy: $('#gd-copy'), csv: $('#gd-csv'),
@@ -55,6 +56,9 @@
   let workerBroken = false;
   let saveTimer = null;
   let pastePlan = null;
+  let formScope = 'all'; // scope picked in the add-rule form
+  let openScopeRule = null; // keeps a scope picker open while it re-renders
+  let kept = new Set(); // group indexes frozen for a partial redraw
   let idCounter = 0;
 
   // ---- Small helpers ------------------------------------------------------
@@ -202,9 +206,28 @@
 
   function num(v) { return isEmptyValue(v) || !isInt(v) ? null : parseInt(v, 10); }
 
+  // Scope is 'all', one group index, or a sorted array of 2+ group indexes
+  // (a list covering every group is the same as 'all'). null = invalid.
+  function cleanScope(raw, count) {
+    if (raw === 'all' || raw === undefined || raw === null) return 'all';
+    const list = (Array.isArray(raw) ? raw : [raw]).map((x) => (isInt(x) ? parseInt(x, 10) : NaN));
+    if (!list.length || list.some((g) => !(g >= 0 && g < count))) return null;
+    return normScope(list, count);
+  }
+
+  function normScope(list, count) {
+    const u = Array.from(new Set(list)).sort((a, b) => a - b);
+    if (u.length >= count) return 'all';
+    return u.length === 1 ? u[0] : u;
+  }
+
+  function scopeGroups(scope) {
+    return scope === 'all' || scope === undefined || scope === null ? null : (Array.isArray(scope) ? scope : [scope]);
+  }
+
   function cleanRule(r, attributes, count) {
-    const scope = r.scope === 'all' || r.scope === undefined || r.scope === null ? 'all' : parseInt(r.scope, 10);
-    if (scope !== 'all' && !(scope >= 0 && scope < count)) return null;
+    const scope = cleanScope(r.scope, count);
+    if (scope === null) return null;
     const rule = { id: typeof r.id === 'string' && r.id ? r.id : uid('r'), type: r.type };
     if (r.type === 'size') return Object.assign(rule, { scope, min: num(r.min), max: num(r.max) });
     const attr = attributes.find((a) => a.id === r.attrId);
@@ -272,6 +295,7 @@
     const stale = !!shown && shown.version !== version;
     els.resultsWrap.classList.toggle('is-outdated', stale);
     els.outdated.hidden = !stale;
+    renderPartial();
   }
 
   // ---- Step 1: attributes --------------------------------------------------
@@ -784,8 +808,16 @@
     state.groups.count = n;
     state.groups.names = state.groups.names.slice(0, n);
     const before = state.rules.length;
-    state.rules = state.rules.filter((r) => r.scope === 'all' || r.scope === undefined || r.scope < n);
+    state.rules = state.rules.filter((r) => {
+      const list = scopeGroups(r.scope);
+      if (!list) return true;
+      const left = list.filter((g) => g < n);
+      if (!left.length) return false;
+      r.scope = normScope(left, n);
+      return true;
+    });
     const removed = before - state.rules.length;
+    kept = new Set();
     if (removed) notice(els.rulesNotice, `Removed ${plural(removed, 'rule')} for groups that no longer exist.`);
     changed({ groups: true, rules: true });
   });
@@ -799,15 +831,61 @@
     return state.attributes.filter((a) => a.kind !== 'label');
   }
 
-  function scopeOptions(select, current) {
-    select.innerHTML = '';
-    select.appendChild(el('option', { value: 'all', text: 'All groups (each)' }));
-    for (let g = 0; g < state.groups.count; g++) select.appendChild(el('option', { value: String(g), text: groupLabel(g) }));
-    select.value = current === undefined || current === 'all' ? 'all' : String(current);
+  function scopeSummary(scope) {
+    const list = scopeGroups(scope);
+    if (!list) return 'All groups (each)';
+    return list.map(groupLabel).join(', ');
+  }
+
+  // A compact multi-select: a <details> with one checkbox per group. "All groups"
+  // and individual groups are mutually consistent (all ticked = All).
+  function scopePicker(current, label, onChange) {
+    const count = state.groups.count;
+    let sel = scopeGroups(current) ? scopeGroups(current).slice() : null; // null = all
+    const wrap = el('details', { class: 'gd-scope' });
+    const summary = el('summary', { class: 'form-control form-control-sm gd-scope-summary', 'aria-label': `${label}: ${scopeSummary(current)}` });
+    const list = el('div', { class: 'gd-scope-list' });
+    const boxes = [];
+    const allBox = el('input', { type: 'checkbox', class: 'gd-scope-all' });
+    list.appendChild(el('label', { class: 'gd-check gd-scope-item' }, [allBox, el('span', { text: 'All groups (each)' })]));
+    for (let g = 0; g < count; g++) {
+      const box = el('input', { type: 'checkbox', dataset: { group: String(g) } });
+      boxes.push(box);
+      list.appendChild(el('label', { class: 'gd-check gd-scope-item' }, [box, el('span', { text: groupLabel(g) })]));
+    }
+    function paint() {
+      allBox.checked = sel === null;
+      boxes.forEach((b, g) => { b.checked = sel === null || sel.indexOf(g) !== -1; });
+      const value = sel === null ? 'all' : normScope(sel, count);
+      summary.textContent = scopeSummary(value);
+      summary.setAttribute('aria-label', `${label}: ${scopeSummary(value)}`);
+      return value;
+    }
+    allBox.addEventListener('change', () => {
+      sel = allBox.checked ? null : [0];
+      onChange(paint());
+    });
+    boxes.forEach((b, g) => b.addEventListener('change', () => {
+      const cur = sel === null ? boxes.map((_, i) => i) : sel.slice();
+      const next = b.checked ? cur.concat(g) : cur.filter((x) => x !== g);
+      if (!next.length) { b.checked = true; return; } // at least one group
+      sel = next.length >= count ? null : next;
+      onChange(paint());
+    }));
+    wrap.appendChild(summary);
+    wrap.appendChild(list);
+    paint();
+    return wrap;
   }
 
   function renderScopeOptions() {
-    scopeOptions(els.ruleScope, els.ruleScope.value || 'all');
+    const count = state.groups.count;
+    if (scopeGroups(formScope) && scopeGroups(formScope).some((g) => g >= count)) formScope = 'all';
+    const open = els.ruleScope.querySelector('details') && els.ruleScope.querySelector('details').open;
+    els.ruleScope.innerHTML = '';
+    const picker = scopePicker(formScope, 'Rule applies to', (v) => { formScope = v; });
+    if (open) picker.open = true;
+    els.ruleScope.appendChild(picker);
   }
 
   function renderRuleForm() {
@@ -931,7 +1009,7 @@
       rule.max = maxRaw === '' ? null : parseInt(maxRaw, 10);
       if (type !== 'sum' && ((rule.min !== null && rule.min < 0) || (rule.max !== null && rule.max < 0))) return fail('Min and max can’t be negative.');
       if (rule.min !== null && rule.max !== null && rule.min > rule.max) return fail('Min is larger than max.');
-      rule.scope = els.ruleScope.value === 'all' ? 'all' : parseInt(els.ruleScope.value, 10);
+      rule.scope = formScope;
     }
     fail('');
     state.rules.push(rule);
@@ -943,7 +1021,7 @@
   });
 
   function overrides(rule) {
-    if (rule.scope === 'all' || rule.type === 'apart' || rule.type === 'together') return false;
+    if (!scopeGroups(rule.scope) || rule.type === 'apart' || rule.type === 'together') return false;
     return state.rules.some((r) => r !== rule && r.type === rule.type && r.scope === 'all' &&
       (rule.type === 'size' || (r.attrId === rule.attrId && (rule.type === 'sum' || String(r.value) === String(rule.value)))));
   }
@@ -992,12 +1070,9 @@
       } else if (rule.type !== 'together') {
         fields.appendChild(numInput(rule, 'min', 'min'));
         fields.appendChild(numInput(rule, 'max', 'max'));
-        const scope = el('select', { class: 'form-control form-control-sm gd-rule-scope', 'aria-label': `Scope of ${ruleTarget(rule)}` });
-        scopeOptions(scope, rule.scope);
-        scope.addEventListener('change', () => {
-          rule.scope = scope.value === 'all' ? 'all' : parseInt(scope.value, 10);
-          changed({ rules: true });
-        });
+        const scope = scopePicker(rule.scope, `Scope of ${ruleTarget(rule)}`, (v) => { rule.scope = v; openScopeRule = rule.id; changed({ rules: true }); });
+        scope.classList.add('gd-rule-scope');
+        if (rule.id === openScopeRule) scope.open = true;
         fields.appendChild(scope);
         if (overrides(rule)) fields.appendChild(el('span', { class: 'gd-badge', text: 'overrides all-groups rule', title: 'This group uses this rule instead of the all-groups one' }));
       } else {
@@ -1073,11 +1148,77 @@ self.onmessage = function (e) {
     });
   }
 
+  // Partial redraw: the ticked groups stay exactly as they are; everyone else is
+  // drawn again into the remaining groups. Rules are per group, so that is a
+  // smaller draw of the same kind: fewer people, fewer groups, rules remapped.
+  function partialActive() {
+    return els.partial.checked && !els.partial.disabled && !!shown && shown.version === version;
+  }
+
+  function partialPlan() {
+    const G = shown.groups.length;
+    const keptList = Array.from(kept).filter((g) => g < G).sort((a, b) => a - b);
+    const redraw = [];
+    for (let g = 0; g < G; g++) if (keptList.indexOf(g) === -1) redraw.push(g);
+    const toNew = {};
+    redraw.forEach((g, i) => { toNew[g] = i; });
+    const sub = clone(state);
+    const ids = {};
+    redraw.forEach((g) => shown.groups[g].members.forEach((p) => { ids[p.id] = true; }));
+    sub.people = state.people.filter((p) => ids[p.id]);
+    sub.groups = { count: redraw.length, names: redraw.map(groupLabel) };
+    sub.rules = [];
+    state.rules.forEach((r) => {
+      const list = scopeGroups(r.scope);
+      if (!list) { sub.rules.push(clone(r)); return; }
+      const mapped = list.filter((g) => g in toNew).map((g) => toNew[g]);
+      if (mapped.length) sub.rules.push(Object.assign(clone(r), { scope: normScope(mapped, redraw.length) }));
+    });
+    return { keptList, redraw, sub };
+  }
+
+  // Put the redrawn groups back among the kept ones and re-check everything
+  // against the full setup, so any rule the partial draw can't honour is shown.
+  function mergePartial(result, plan, setup) {
+    if (result.status !== 'ok' && result.status !== 'best-effort') return result;
+    const groups = [];
+    for (let g = 0; g < shown.groups.length; g++) groups.push(shown.groups[g].members.map((p) => p.id));
+    plan.redraw.forEach((g, i) => { groups[g] = result.groups[i]; });
+    const violations = Solver.evaluate(setup, groups);
+    return { status: violations.length ? 'best-effort' : 'ok', groups, violations, method: result.method };
+  }
+
+  function renderPartial() {
+    const ok = !!shown && shown.version === version && shown.groups.length > 1;
+    els.partial.disabled = !ok;
+    els.partialWrap.classList.toggle('is-disabled', !ok);
+    if (!ok) els.partial.checked = false;
+    const on = els.partial.checked;
+    els.results.classList.toggle('is-partial', on);
+    els.results.querySelectorAll('.gd-card').forEach((card) => {
+      const g = parseInt(card.dataset.group, 10);
+      const box = card.querySelector('.gd-keep input');
+      if (box) box.checked = kept.has(g);
+      card.classList.toggle('is-kept', on && kept.has(g));
+    });
+    const redraw = ok ? shown.groups.length - Array.from(kept).filter((g) => g < shown.groups.length).length : 0;
+    els.partialHint.hidden = !on;
+    els.partialHint.textContent = on
+      ? (redraw ? `Tick the groups to keep — “Draw again” redraws the other ${redraw}.` : 'All groups are kept — untick at least one to redraw.')
+      : '';
+    els.draw.disabled = !!running || (on && redraw === 0);
+  }
+
   function draw() {
     if (running) return;
     const n = namedPeople().length;
     if (!n) {
       showStatus('Add at least one person (step 2) to draw groups.');
+      return;
+    }
+    const partial = partialActive() ? partialPlan() : null;
+    if (partial && !partial.redraw.length) {
+      showStatus('Every group is kept — untick at least one group to redraw.');
       return;
     }
     const seq = ++drawSeq;
@@ -1094,14 +1235,14 @@ self.onmessage = function (e) {
       els.cancel.hidden = false;
       showStatus('Searching for a split that meets every rule…');
     }, 450);
-    solveAsync(seq, setup).then((result) => {
+    solveAsync(seq, partial ? partial.sub : setup).then((result) => {
       clearTimeout(slowTimer);
       const wait = reduce ? 0 : Math.max(0, 600 - (Date.now() - startedAt));
-      setTimeout(() => finish(result, setup, setupVersion), wait);
+      setTimeout(() => finish(partial ? mergePartial(result, partial, setup) : result, setup, setupVersion, partial), wait);
     });
   }
 
-  function finish(result, setup, setupVersion) {
+  function finish(result, setup, setupVersion, partial) {
     running = null;
     els.draw.disabled = false;
     els.draw.classList.remove('is-dealing');
@@ -1111,14 +1252,16 @@ self.onmessage = function (e) {
     els.alert.innerHTML = '';
     if (result.status === 'ok' || result.status === 'best-effort') {
       const entry = makeEntry(result, setup, setupVersion);
+      if (partial) entry.kept = partial.keptList;
       history.unshift(entry);
       history = history.slice(0, HISTORY_MAX);
       display(entry, true);
       renderHistory();
       const G = entry.groups.length;
+      const what = partial ? `Redrew ${plural(partial.redraw.length, 'group')}, kept ${partial.keptList.length}` : `Drew ${plural(G, 'group')}`;
       showStatus(result.status === 'ok'
-        ? `Drew ${plural(G, 'group')}.`
-        : `Drew ${plural(G, 'group')} — best effort, ${plural(result.violations.length, 'rule violation')}.`, true);
+        ? `${what}.`
+        : `${what} — best effort, ${plural(result.violations.length, 'rule violation')}.`, true);
     } else {
       renderFailure(result);
     }
@@ -1201,6 +1344,15 @@ self.onmessage = function (e) {
     };
   }
 
+  function keepBox(g, name) {
+    const box = el('input', { type: 'checkbox', dataset: { group: String(g) }, 'aria-label': `Keep ${name} as it is` });
+    box.addEventListener('change', () => {
+      if (box.checked) kept.add(g); else kept.delete(g);
+      renderPartial();
+    });
+    return el('label', { class: 'gd-keep' }, [box, el('span', { text: '🔒 Keep' })]);
+  }
+
   function composition(entry, members) {
     const bits = [];
     const attrs = {};
@@ -1233,6 +1385,7 @@ self.onmessage = function (e) {
     const others = entry.attrs.filter((a) => a.kind !== 'label');
     const G = entry.groups.length;
     const cardStep = Math.min(140, 1100 / Math.max(1, G));
+    const frozen = new Set(entry.kept || []);
 
     entry.groups.forEach((group, g) => {
       const color = PALETTE[g % PALETTE.length];
@@ -1241,6 +1394,7 @@ self.onmessage = function (e) {
       const head = el('div', { class: 'team-card-head' }, [
         el('h3', { class: 'team-name gd-card-name', text: group.name }),
         el('span', { class: 'team-size', text: plural(group.members.length, 'member') }),
+        keepBox(g, group.name),
       ]);
       card.appendChild(head);
       const comp = composition(entry, group.members);
@@ -1256,7 +1410,7 @@ self.onmessage = function (e) {
             .map((a) => el('span', { class: 'gd-attr-chip', title: a.name, text: `${a.name}: ${p.values[a.id]}` }));
           if (chips.length) li.appendChild(el('span', { class: 'gd-member-chips' }, chips));
         }
-        if (!reduce) {
+        if (!reduce && !frozen.has(g)) {
           li.style.animationDelay = Math.round(g * cardStep + 180 + mi * memberStep) + 'ms';
           li.classList.add('is-popping');
         }
@@ -1264,7 +1418,7 @@ self.onmessage = function (e) {
       });
       if (!group.members.length) ul.appendChild(el('li', { class: 'gd-member-empty muted', text: 'Nobody' }));
       card.appendChild(ul);
-      if (!reduce) {
+      if (!reduce && !frozen.has(g)) {
         card.style.animationDelay = Math.round(g * cardStep) + 'ms';
         card.classList.add('is-dealt');
       }
@@ -1273,6 +1427,7 @@ self.onmessage = function (e) {
 
     els.results.dataset.drawNo = String(entry.no);
     els.actions.hidden = false;
+    renderPartial();
     renderViolations(entry);
     markOutdated();
     renderHistoryCurrent();
@@ -1294,6 +1449,7 @@ self.onmessage = function (e) {
       const btn = el('button', { type: 'button', class: 'gd-history-btn', dataset: { drawNo: String(entry.no) } }, [
         el('span', { class: 'gd-history-no', text: `#${entry.no}` }),
         el('span', { text: `${plural(entry.groups.length, 'group')} · ${time}` }),
+        entry.kept && entry.kept.length ? el('span', { class: 'gd-badge', text: `${entry.kept.length} kept` }) : null,
         entry.status === 'best-effort' ? el('span', { class: 'gd-badge is-warning', text: 'best effort' }) : null,
       ]);
       btn.addEventListener('click', () => {
@@ -1314,6 +1470,7 @@ self.onmessage = function (e) {
   }
 
   els.draw.addEventListener('click', draw);
+  els.partial.addEventListener('change', () => { if (els.partial.checked) kept = new Set(); renderPartial(); });
   els.cancel.addEventListener('click', () => {
     if (!running) return;
     stopWorker();

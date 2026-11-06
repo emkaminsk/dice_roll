@@ -359,7 +359,7 @@
             </div>
             <div class="gd-field" data-for="size count sum">
               <label for="gd-rule-scope">Applies to</label>
-              <select id="gd-rule-scope" class="form-control form-control-sm"></select>
+              <div id="gd-rule-scope" class="gd-scope-host"></div>
             </div>
             <div class="gd-field gd-field-action">
               <button type="submit" id="gd-rule-add" class="btn btn-primary btn-sm">Add rule</button>
@@ -380,7 +380,9 @@
             </button>
             <button type="button" id="gd-cancel" class="btn btn-outline-secondary btn-sm" hidden>Cancel</button>
             <label class="gd-check gd-show-attrs"><input type="checkbox" id="gd-show-attrs"> Show attributes</label>
+            <label class="gd-check gd-partial" id="gd-partial-wrap"><input type="checkbox" id="gd-partial" disabled> Partial redraw</label>
           </div>
+          <p id="gd-partial-hint" class="gd-help muted" role="status" hidden></p>
           <p id="gd-status" class="result-line" aria-live="polite"></p>
           <div id="gd-alert" class="gd-alert" hidden></div>
           <div id="gd-results-wrap" class="gd-results-wrap">
