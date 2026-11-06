@@ -30,7 +30,7 @@
     addPerson: $('#gd-add-person'), pasteToggle: $('#gd-paste-toggle'), paste: $('#gd-paste'),
     pasteText: $('#gd-paste-text'), pastePreview: $('#gd-paste-preview'), pasteCancel: $('#gd-paste-cancel'),
     pasteResult: $('#gd-paste-result'),
-    groupCount: $('#gd-group-count'), groupNames: $('#gd-group-names'), balance: $('#gd-balance'),
+    groupCount: $('#gd-group-count'), groupWord: $('#gd-group-word'), groupNames: $('#gd-group-names'), balance: $('#gd-balance'),
     balanceNote: $('#gd-balance-note'), bestEffort: $('#gd-best-effort'),
     ruleList: $('#gd-rule-list'), rulesEmpty: $('#gd-rules-empty'), rulesNotice: $('#gd-rules-notice'),
     ruleForm: $('#gd-rule-form'), ruleType: $('#gd-rule-type'), ruleAttr: $('#gd-rule-attr'),
@@ -65,7 +65,7 @@
 
   function emptySetup() {
     return {
-      attributes: [], people: [], groups: { count: 2, names: [] }, rules: [],
+      attributes: [], people: [], groups: { count: 2, label: '', names: [] }, rules: [],
       options: { balance: true, bestEffort: false },
     };
   }
@@ -95,7 +95,8 @@
   function attrById(id) { return state.attributes.find((a) => a.id === id); }
   function isInt(text) { return /^-?\d+$/.test(String(text).trim()); }
   function namedPeople() { return state.people.filter((p) => p.name.trim() !== ''); }
-  function groupLabel(g) { return (state.groups.names[g] || '').trim() || `Group ${g + 1}`; }
+  function groupWord(groups) { return String((groups && groups.label) || '').trim() || 'Group'; }
+  function groupLabel(g) { return (state.groups.names[g] || '').trim() || `${groupWord(state.groups)} ${g + 1}`; }
   function reduceMotion() {
     return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
@@ -177,6 +178,7 @@
     const groups = obj.groups && typeof obj.groups === 'object' ? obj.groups : {};
     const count = Math.min(50, Math.max(2, parseInt(groups.count, 10) || 2));
     const names = Array.isArray(groups.names) ? groups.names.slice(0, count).map((n) => (typeof n === 'string' ? n : '')) : [];
+    const label = typeof groups.label === 'string' ? groups.label.trim().slice(0, 30) : '';
     const rules = [];
     for (const r of obj.rules) {
       if (!r || !RULE_LABEL[r.type]) return fail('A rule has an unknown type.');
@@ -188,7 +190,7 @@
     return {
       ok: true,
       setup: {
-        attributes, people, groups: { count, names }, rules,
+        attributes, people, groups: { count, label, names }, rules,
         options: { balance: options.balance !== false, bestEffort: !!options.bestEffort },
       },
     };
@@ -781,11 +783,12 @@
 
   function renderGroups() {
     els.groupCount.value = state.groups.count;
+    els.groupWord.value = state.groups.label || '';
     els.groupNames.innerHTML = '';
     for (let g = 0; g < state.groups.count; g++) {
       const input = el('input', {
         type: 'text', class: 'form-control form-control-sm gd-group-name', value: state.groups.names[g] || '',
-        placeholder: `Group ${g + 1}`, 'aria-label': `Name of group ${g + 1}`, autocomplete: 'off',
+        placeholder: `${groupWord(state.groups)} ${g + 1}`, 'aria-label': `Name of group ${g + 1}`, autocomplete: 'off',
       });
       input.style.setProperty('--team-color', PALETTE[g % PALETTE.length]);
       input.addEventListener('input', () => {
@@ -820,6 +823,13 @@
     kept = new Set();
     if (removed) notice(els.rulesNotice, `Removed ${plural(removed, 'rule')} for groups that no longer exist.`);
     changed({ groups: true, rules: true });
+  });
+  els.groupWord.addEventListener('input', () => {
+    state.groups.label = els.groupWord.value.slice(0, 30);
+    Array.from(els.groupNames.children).forEach((input, g) => { input.placeholder = `${groupWord(state.groups)} ${g + 1}`; });
+    renderScopeOptions();
+    renderRules();
+    changed();
   });
   els.balance.addEventListener('change', () => { state.options.balance = els.balance.checked; changed(); });
   els.bestEffort.addEventListener('change', () => { state.options.bestEffort = els.bestEffort.checked; changed(); });
@@ -1338,7 +1348,7 @@ self.onmessage = function (e) {
         .filter((t, i, arr) => arr.findIndex((x) => x.attrId === t.attrId && String(x.value) === String(t.value)) === i),
       sumAttrs: setup.rules.filter((r) => r.type === 'sum').map((r) => r.attrId).filter((x, i, arr) => arr.indexOf(x) === i),
       groups: result.groups.map((ids, g) => ({
-        name: (setup.groups.names[g] || '').trim() || `Group ${g + 1}`,
+        name: (setup.groups.names[g] || '').trim() || `${groupWord(setup.groups)} ${g + 1}`,
         members: ids.map((id) => byId[id]).filter(Boolean),
       })),
     };

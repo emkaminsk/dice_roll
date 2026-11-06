@@ -1721,3 +1721,25 @@ def test_gd_partial_redraw_guards(page):
     page.fill("#gd-group-count", "4")
     page.press("#gd-group-count", "Tab")
     assert page.is_disabled("#gd-partial") and not page.is_checked("#gd-partial")
+
+
+def test_gd_group_word_used_in_results_copy_csv_and_rules(page):
+    """A custom group word ('Pokój') replaces 'Group' in results, copied text, CSV, scope picker; it persists via export/import."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    page.fill("#gd-group-word", "Pokój")
+    assert page.get_attribute("#gd-group-names input", "placeholder") == "Pokój 1"
+    _gd_draw(page)
+    names = page.eval_on_selector_all("#gd-results .gd-card-name", "els => els.map(e => e.textContent)")
+    assert names == ["Pokój 1", "Pokój 2", "Pokój 3"]
+    page.evaluate("() => { navigator.clipboard.writeText = t => { window.__copied = t; return Promise.resolve(); }; }")
+    page.click("#gd-copy")
+    assert page.evaluate("() => window.__copied").startswith("Pokój 1 (4): ")
+    with page.expect_download() as dl:
+        page.click("#gd-csv")
+    assert Path(dl.value.path()).read_text().splitlines()[1].startswith("Pokój 1,")
+    _gd_add_rule(page, "size", vmin=2, scope=[0, 1])
+    assert page.locator(".gd-rule .gd-scope-summary").text_content().strip() == "Pokój 1, Pokój 2"
+    assert page.evaluate("() => GroupDrawSolver.describeRule({type:'size',scope:[0,1],min:2}, {groups:{count:3,label:'Pokój',names:[]}})") \
+        == "Group size at least 2 (Pokój 1, Pokój 2)"

@@ -57,7 +57,8 @@
     function groupName(setup, g) {
       const names = (setup.groups && setup.groups.names) || [];
       const name = names[g] && String(names[g]).trim();
-      return name || `Group ${g + 1}`;
+      const word = String((setup.groups && setup.groups.label) || '').trim() || 'Group';
+      return name || `${word} ${g + 1}`;
     }
 
     function isAllScope(scope) {
