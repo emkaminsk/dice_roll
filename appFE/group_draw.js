@@ -1324,7 +1324,7 @@ self.onmessage = function (e) {
   // ---- Result export ---------------------------------------------------------
 
   function resultText(entry) {
-    return entry.groups.map((g) => [`${g.name} (${g.members.length})`].concat(g.members.map((p) => `- ${p.name}`)).join('\n')).join('\n\n') + '\n';
+    return entry.groups.map((g) => `${g.name} (${g.members.length}): ${g.members.map((p) => p.name).join(', ')}`).join('\n') + '\n';
   }
 
   function csvCell(v) {

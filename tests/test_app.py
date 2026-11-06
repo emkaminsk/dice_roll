@@ -1056,7 +1056,7 @@ def test_gd_copy_text_and_csv_contain_everyone_once(page):
     page.evaluate("() => { navigator.clipboard.writeText = t => { window.__copied = t; return Promise.resolve(); }; }")
     page.click("#gd-copy")
     text = page.evaluate("() => window.__copied")
-    names = [line[2:] for line in text.splitlines() if line.startswith("- ")]
+    names = [n for line in text.splitlines() for n in line.split(": ", 1)[1].split(", ")]
     example = page.evaluate("() => GROUP_DRAW_EXAMPLE.people.map(p => p.name)")
     assert sorted(names) == sorted(example)
     with page.expect_download() as dl:
