@@ -1,75 +1,41 @@
-# Plan — label attributes in Group Draw rules
+# Plan — light/dark mode toggle (top right)
 
-Scope (confirmed): **count rule only** for label attributes (min/max per group of
-people whose label equals a chosen value). Exact-text matching. Empty values ignored.
-Out of scope: keep apart / keep together on labels, size/sum (n/a). Spec reference:
-`.ai/spec-group-draw.md` (§4.1 label kind, §4.3 rules, §9 parked item).
+## Findings
+- Dark mode already exists, but only via `@media (prefers-color-scheme: dark)` — the user
+  cannot choose. 5 such blocks in `appFE/style.css` (tokens l.40, Bootstrap button
+  re-tints l.213, status tokens l.1105, Group Draw team names l.1568, Group Draw selects l.1689).
+- Colours are already CSS tokens (`--bg`, `--surface`, `--ink`, …), so theming = swapping tokens.
+- No JS reads the colour scheme (wheel/canvas has no theme-dependent colours) → no JS redraw needed.
+- Top-left already has a fixed round `.home-link` button (hard-coded white bg, `!important`
+  rules, l.1626+; mobile override l.1583). The toggle mirrors it on the right.
+- Only existing `localStorage` use is guarded try/catch (wheel, group draw) — same pattern here.
 
-## Why this is small
-The solver already treats count rules generically through `keyOf(value)` string
-comparison (`group_draw_solver.js` `normalizeRules` counts, `validateHints`, `evaluate`,
-`violationList`). Label support is mostly *un-blocking* the label kind and giving the UI
-a way to pick a value. No change to the search algorithm.
+## Design
+- Theme lives in `<html data-theme="light|dark">`. Default = system preference; an explicit
+  click is saved to `localStorage` (guarded; page works without it).
+- Tiny inline `<script>` in `<head>` (before CSS paint) sets `data-theme` → no flash of the wrong theme.
+- Convert the 5 media blocks from `@media (prefers-color-scheme: dark) { … }` to
+  `:root[data-theme="dark"] …` selectors — one source of truth, no duplicated token sets.
+  Trade-off: with JS disabled the page is light-only (the page needs JS anyway).
+- If the user never chose, follow live OS changes (`matchMedia` change listener).
+- Toggle = round fixed button, top right, same size/shadow/hover as `.home-link`; sun icon
+  in dark mode / moon icon in light mode (Font Awesome already bundled — verify glyphs exist),
+  `aria-label` "Switch to dark/light mode", `aria-pressed`, ≥44px touch target,
+  icon swap/rotate animation (disabled under `prefers-reduced-motion`).
+- Restyle `.home-link` for dark so both corner buttons match (use tokens, not `#fff`).
+- Mobile (≤576px): same corner position as home-link, mirrored; header padding already reserves space.
 
-## Changes
+## Steps
+- [ ] 1. `index.html`: head inline theme script; `<button id="theme-toggle">` after `.home-link`.
+- [ ] 2. New `appFE/theme.js` (toggle handler, storage, system-change listener); load at bottom of `index.html`.
+- [ ] 3. `style.css`: convert 5 media blocks to `[data-theme="dark"]`; add `.theme-toggle` styles; token-ise `.home-link`.
+- [ ] 4. Tests in `tests/test_app.py`: toggle present top-right; click flips `data-theme` and computed
+        body background; choice survives reload; default follows `color_scheme="dark"` emulation;
+        tools unaffected by toggling; no console errors.
+- [ ] 5. `ux-polisher` pass: contrast in both themes on every tool + Group Draw view, 375px, reduced motion.
+- [ ] 6. Docs: tick "Dark mode" in `ROADMAP.md` (note manual toggle), add `theme.js` to README project structure.
+- [ ] 7. Verify (`verify-app` skill: full Playwright suite + screenshots light/dark desktop & 375px), then commit + push.
 
-1. **Solver** (`appFE/group_draw_solver.js`)
-   - `usable()` (~l.69-77): drop the `a.kind === 'label'` rejection for `count` rules;
-     keep rejecting label for `sum`/`apart`/`together` (so `apart`/`together` stay
-     category/integer only).
-   - Verify `keyOf` compares labels as exact strings (no trim/case-fold) and that
-     `describeRule` / hint messages read well for labels (“surname = Smith”).
-   - Leave empty labels ignored (`keyOf` -> null) — already the behaviour.
-
-2. **UI rule form** (`appFE/group_draw.js`)
-   - `ruleAttrs(type)` (~l.795): for `count`, include labels; for `apart`/`together`
-     keep `kind !== 'label'`.
-   - `renderValueField()` (~l.884): for a label attribute, fill the value `<select>` with
-     the **distinct non-empty values currently present in people**, sorted; show a hint
-     “No values yet — add people first” and disable Add when there are none.
-   - Re-run `renderValueField()` when people change (so new surnames appear) via the
-     existing `changed()` path.
-   - Help text l.828: replace “labels are display-only” with accurate wording per type.
-   - `cleanRule()` (~l.208): allow label for `count` (import/autosave validation);
-     validate that `value` is a non-empty string. Keep rejecting for other types.
-   - Rule list / `ruleTarget()` labels: make sure label rules render like category ones.
-   - Stale rules: if the last person with a rule's value is removed, keep the rule and let
-     `validateHints` show the existing “Nobody has … — the rule has no effect” warning.
-
-3. **Spec/README**: spec §4.1 (label: usable in count rules), §4.3 (rule table), §9
-   (remove parked item, note keep-apart/together on labels still parked); README Group
-   Draw entry needs no change (links to spec).
-
-4. **Tests** (`tests/test_app.py`, Playwright, existing `_gd_*` helpers)
-   - Solver via `page.evaluate`: label count rule (max 1 “Smith” per group) is honoured
-     over many draws; infeasible case (3 Smiths, 2 groups, max 1) reports the rule;
-     empty labels never match; exact-text (“smith” != “Smith”).
-   - UI: add label attr + people, label appears as a rule target with a value dropdown
-     of distinct values; rule can be added; draw satisfies it; value dropdown updates
-     after adding a person; label still absent for sum/apart/together.
-   - Export/import + autosave round trip keeps a label count rule; import with a label
-     `apart` rule is still dropped.
-   - Regression: whole existing suite (80 tests) passes.
-
-5. **Verify & ship**: run `uv run --with playwright --with pytest pytest tests/`; ux-polisher
-   quick look at the dropdown (dark mode, 375px); fairness-auditor not needed (no RNG or
-   search changes). Branch `feature/group-draw-label-rules`, PR to master (note: `gh` is
-   not logged in here, direct pushes to master worked last time).
-
-## Risks / decisions to watch
-- Exact matching means “Smith ” (trailing space) ≠ “Smith”; mitigated by the dropdown
-  listing distinct values verbatim. Consider showing a note if two values differ only by
-  case/whitespace (cheap hint, optional).
-- Free-text labels can have hundreds of distinct values (e.g. unique surnames); the
-  dropdown stays usable up to ~100 people, which matches real use.
-
-## Review (done)
-- [x] Solver: label allowed in count rules only (`usable()`); exact-text via `keyOf`.
-- [x] UI: labels listed for count rules; value dropdown = distinct values of named people,
-      sorted, refreshed on every change (selection kept); "No values yet" + Add disabled
-      when empty; help text notes exact matching and flags case/space look-alikes.
-- [x] Import/autosave: label count rules kept (blank value refused); label apart/together
-      still refused — note: the whole import is rejected with an error (existing behaviour),
-      not silently dropped.
-- [x] Value select capped at 14rem (long surnames no longer stretch the form).
-- [x] 5 new Playwright tests; full suite 85 passed. Dark mode checked at 1100/375px.
+## Out of scope
+- A third "System" option in the toggle (could be added later as a 3-state control).
+- Changing the palette itself.

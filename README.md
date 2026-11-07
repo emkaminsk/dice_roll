@@ -112,6 +112,7 @@ appFE/
   celebration.js     # full-screen winner overlay + confetti (used by the wheel)
   dice_roll.js       # dice roller
   value_selector.js  # add/remove independent picker sections
+  theme.js           # light/dark toggle (follows OS by default, choice saved locally)
   wheel.js           # canvas Wheel of Fortune (name persistence + celebration)
   coin_flip.js       # animated 3D coin flip with a session streak counter
   eight_ball.js      # Magic 8-Ball (shake + reveal a classic answer)
