@@ -37,21 +37,19 @@
 /* Dark mode — same shell, same components; skeuomorphic game props (dice,
    coin, 8-ball, cookie, lotto balls, confetti) intentionally keep their
    real-world colors in both themes, same as a physical object would. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0a0f1e;
-    --surface: #131b2e;
-    --ink: #e7ebf6;
-    --muted: #93a1bd;
-    --border: #263352;
-    --accent: #818cf8;
-    --accent-ink: #a5b4fc;
-    --accent-soft: rgba(129, 140, 248, 0.16);
-    --highlight: #a5b4fc;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
-    --shadow-hover: 0 4px 10px rgba(0, 0, 0, 0.4), 0 18px 36px rgba(0, 0, 0, 0.45);
-    color-scheme: dark;
-  }
+:root[data-theme="dark"] {
+  --bg: #0a0f1e;
+  --surface: #131b2e;
+  --ink: #e7ebf6;
+  --muted: #93a1bd;
+  --border: #263352;
+  --accent: #818cf8;
+  --accent-ink: #a5b4fc;
+  --accent-soft: rgba(129, 140, 248, 0.16);
+  --highlight: #a5b4fc;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-hover: 0 4px 10px rgba(0, 0, 0, 0.4), 0 18px 36px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -210,21 +208,19 @@ select.form-control:focus-visible { outline: none; }
   .btn-remove { min-height: 44px; padding: 0 12px; }
 }
 
-@media (prefers-color-scheme: dark) {
-  /* Bootstrap's outline/link buttons carry their own hard-coded gray;
-     re-tint them to the dark palette so they don't look bleached-out. */
-  .btn-outline-secondary {
-    color: var(--muted);
-    border-color: var(--border);
-  }
-  .btn-outline-secondary:hover:not(:disabled) {
-    color: var(--ink);
-    background-color: var(--accent-soft);
-    border-color: var(--accent);
-  }
-  .btn-link:not(.btn-remove) {
-    color: var(--accent-ink);
-  }
+/* Bootstrap's outline/link buttons carry their own hard-coded gray;
+   re-tint them to the dark palette so they don't look bleached-out. */
+:root[data-theme="dark"] .btn-outline-secondary {
+  color: var(--muted);
+  border-color: var(--border);
+}
+:root[data-theme="dark"] .btn-outline-secondary:hover:not(:disabled) {
+  color: var(--ink);
+  background-color: var(--accent-soft);
+  border-color: var(--accent);
+}
+:root[data-theme="dark"] .btn-link:not(.btn-remove) {
+  color: var(--accent-ink);
 }
 
 /* Dice */
@@ -1102,14 +1098,12 @@ select.form-control:focus-visible { outline: none; }
   --warn-soft: rgba(245, 158, 11, 0.12);
   --ok: #059669;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --danger: #f87171;
-    --danger-soft: rgba(248, 113, 113, 0.12);
-    --warn: #fbbf24;
-    --warn-soft: rgba(251, 191, 36, 0.12);
-    --ok: #34d399;
-  }
+:root[data-theme="dark"] {
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.12);
+  --ok: #34d399;
 }
 .gd-view [hidden] { display: none !important; }
 .gd-view > .tool-card + .tool-card { margin-top: 20px; }
@@ -1565,10 +1559,8 @@ select.form-control:focus-visible { outline: none; }
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
-@media (prefers-color-scheme: dark) {
-  /* Brighten the group-name tints so indigo/red stay readable on the dark card. */
-  .gd-card .team-name { filter: brightness(1.45) saturate(0.9); }
-}
+/* Brighten the group-name tints so indigo/red stay readable on the dark card. */
+:root[data-theme="dark"] .gd-card .team-name { filter: brightness(1.45) saturate(0.9); }
 @media (max-width: 576px) {
   /* Touch targets >= 44px. */
   .gd-view .btn-sm, .gd-view .form-control-sm, .gd-view select.form-control-sm { min-height: 44px; }
@@ -1581,6 +1573,7 @@ select.form-control:focus-visible { outline: none; }
   /* The fixed home button used to cover the page title and cards while scrolling:
      on phones let it scroll away with the page, in its own spot above the header. */
   html body > .home-link { position: absolute !important; top: 0.6rem !important; left: 0.75rem !important; }
+  html body > .theme-toggle { position: absolute; top: 0.6rem; right: 0.75rem; }
   .page-header { padding-top: 4.6rem; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1636,11 +1629,11 @@ body > .home-link > a {
     justify-content: center !important;
     width: 3rem !important;
     height: 3rem !important;
-    background-color: #fff !important;
+    background-color: var(--surface) !important;
     border-radius: 50% !important;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1) !important;
     transition: all 0.3s ease !important;
-    color: #776e65 !important;
+    color: var(--muted) !important;
     text-decoration: none !important;
     font-size: 1.5rem !important;
 }
@@ -1648,7 +1641,7 @@ body > .home-link > a {
 .home-link a:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    color: #8f7a66;
+    color: var(--accent-ink);
 }
 
 @media (max-width: 768px) {
@@ -1673,7 +1666,7 @@ body > .home-link > a {
 .gd-view select.form-control {
   background-color: var(--surface);
   color: var(--ink);
-  color-scheme: light dark;
+  color-scheme: inherit;
 }
 .gd-view select option {
   background-color: var(--surface);
@@ -1686,14 +1679,12 @@ body > .home-link > a {
   background-image: linear-gradient(var(--accent), var(--accent));
   color: #fff;
 }
-@media (prefers-color-scheme: dark) {
-  .gd-view select option:checked,
-  .gd-view select option:hover,
-  .gd-view select option:focus {
-    background-color: #4f46e5;
-    background-image: linear-gradient(#4f46e5, #4f46e5);
-    color: #fff;
-  }
+:root[data-theme="dark"] .gd-view select option:checked,
+:root[data-theme="dark"] .gd-view select option:hover,
+:root[data-theme="dark"] .gd-view select option:focus {
+  background-color: #4f46e5;
+  background-image: linear-gradient(#4f46e5, #4f46e5);
+  color: #fff;
 }
 
 /* Group Draw: multi-group rule scope + partial redraw */
@@ -1742,3 +1733,55 @@ body > .home-link > a {
   .gd-view .gd-keep input { width: 20px; height: 20px; }
   .gd-scope-list { max-width: calc(100vw - 48px); }
 }
+
+/* Light / dark toggle — mirrors the home button, top right. */
+.theme-toggle {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 1.25rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform var(--dur-base) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard),
+    color var(--dur-base) var(--ease-standard);
+}
+.theme-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  color: var(--accent-ink);
+}
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.theme-toggle i {
+  position: absolute;
+  transition: transform var(--dur-slow) var(--ease-out-back), opacity var(--dur-base) var(--ease-standard);
+}
+/* Light theme shows the moon (click → dark); dark theme shows the sun (click → light). */
+.theme-toggle .fa-sun { opacity: 0; transform: rotate(-90deg) scale(0.4); }
+:root[data-theme="dark"] .theme-toggle .fa-sun { opacity: 1; transform: none; color: #fbbf24; }
+:root[data-theme="dark"] .theme-toggle .fa-moon { opacity: 0; transform: rotate(90deg) scale(0.4); }
+@media (max-width: 768px) {
+  .theme-toggle { top: 1rem; right: 1rem; }
+}
+@media (max-width: 576px) {
+  .theme-toggle { width: 44px; height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle, .theme-toggle i { transition: none; }
+}
+.theme-toggle:focus:not(:focus-visible) { outline: none; }
+/* In dark mode the corner buttons are the same tone as the page: give them a hairline edge. */
+:root[data-theme="dark"] .theme-toggle { box-shadow: 0 0 0 1px var(--border), 0 2px 8px rgba(0, 0, 0, 0.4); }
+:root[data-theme="dark"] body > .home-link > a { box-shadow: 0 0 0 1px var(--border), 0 2px 8px rgba(0, 0, 0, 0.4) !important; }

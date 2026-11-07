@@ -66,7 +66,7 @@ Order within a tier is the suggested build order. Check items off as they ship.
   a single mute toggle, WebAudio, no external assets.
 - [ ] **Share a result** — copy a result as text/emoji ("🎲 rolled 17 on d20") via the
   clipboard API. No server, no URLs with state.
-- [ ] **Dark mode** — `prefers-color-scheme` support in `style.css`.
+- [x] **Dark mode** — follows `prefers-color-scheme` by default, with a manual light/dark toggle (top right, `theme.js`, saved in `localStorage`).
 - [ ] **PWA offline** — service worker + existing manifest so the page works offline.
 
 ## Non-goals (unchanged from the PRD)

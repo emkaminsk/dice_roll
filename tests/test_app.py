@@ -1743,3 +1743,51 @@ def test_gd_group_word_used_in_results_copy_csv_and_rules(page):
     assert page.locator(".gd-rule .gd-scope-summary").text_content().strip() == "Pokój 1, Pokój 2"
     assert page.evaluate("() => GroupDrawSolver.describeRule({type:'size',scope:[0,1],min:2}, {groups:{count:3,label:'Pokój',names:[]}})") \
         == "Group size at least 2 (Pokój 1, Pokój 2)"
+
+
+# ---- Theme toggle ----
+
+def _theme(page):
+    return page.get_attribute("html", "data-theme")
+
+
+def test_theme_toggle_is_top_right_and_flips_theme(page):
+    page.set_viewport_size({"width": 1280, "height": 800})
+    box = page.locator("#theme-toggle").bounding_box()
+    assert box["x"] + box["width"] > 1280 - 100 and box["y"] < 100
+    before = page.evaluate("() => getComputedStyle(document.body).backgroundColor")
+    start = _theme(page)
+    page.click("#theme-toggle")
+    assert _theme(page) != start
+    assert page.get_attribute("#theme-toggle", "aria-pressed") == str(_theme(page) == "dark").lower()
+    # body colour transitions, so wait for it to settle on the new theme
+    page.wait_for_function(
+        "b => getComputedStyle(document.body).backgroundColor !== b", arg=before, timeout=2000
+    )
+    page.click("#theme-toggle")
+    assert _theme(page) == start
+
+
+def test_theme_choice_persists_across_reload(page):
+    start = _theme(page)
+    page.click("#theme-toggle")
+    chosen = _theme(page)
+    page.reload()
+    assert _theme(page) == chosen != start
+
+
+def test_theme_defaults_to_system_preference(server):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        for scheme in ("dark", "light"):
+            pg = browser.new_page(color_scheme=scheme)
+            pg.goto(server)
+            assert _theme(pg) == scheme
+            pg.close()
+        browser.close()
+
+
+def test_theme_toggle_does_not_disturb_tools(page):
+    page.fill("#max", "20")
+    page.click("#theme-toggle")
+    assert page.input_value("#max") == "20"

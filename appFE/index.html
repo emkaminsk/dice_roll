@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dice Roll &amp; Random Picker</title>
     <meta name="description" content="A lightweight set of fair, in-browser random tools: roll dice, spin the wheel, split teams, and draw rule-based groups.">
+    <script>
+      // Resolve the theme before first paint (no flash): saved choice, else the OS setting.
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem('theme'); } catch (e) { /* storage unavailable */ }
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
     <link rel="icon" href="favicon.ico">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest">
@@ -19,6 +30,9 @@
             <i class="fas fa-home"></i>
         </a>
     </div>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false" aria-label="Switch to dark mode" title="Switch to dark mode">
+      <i class="fas fa-moon" aria-hidden="true"></i><i class="fas fa-sun" aria-hidden="true"></i>
+    </button>
     <header class="page-header">
       <h1>Dice Roll &amp; Random Picker</h1>
       <p class="tagline">Fair, instant, in-browser random choices — no login, nothing stored.</p>
@@ -415,6 +429,7 @@
       <p>Everything runs in your browser. Reload to start fresh.</p>
     </footer>
 
+    <script src="theme.js"></script>
     <script src="random.js"></script>
     <script src="celebration.js"></script>
     <script src="dice_roll.js"></script>
