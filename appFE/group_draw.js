@@ -1179,7 +1179,16 @@
     state.rules.forEach((rule) => {
       const li = el('li', { class: 'gd-rule', dataset: { ruleId: rule.id, type: rule.type } });
       li.appendChild(el('span', { class: `gd-rule-type gd-rule-type-${rule.type}`, text: RULE_LABEL[rule.type] }));
-      li.appendChild(el('span', { class: 'gd-rule-target', text: ruleTarget(rule) }));
+      if (rule.type === 'count' && ruleConds(rule).length > 1) {
+        // A compound condition reads as one highlighted block, one condition per line.
+        const lines = ruleConds(rule).map((c, i) => el('span', { class: 'gd-cond' }, [
+          i ? el('span', { class: 'gd-cond-and', text: 'and' }) : null,
+          el('span', { class: 'gd-cond-text', text: `${attrById(c.attrId).name} = ${c.value}` }),
+        ]));
+        li.appendChild(el('span', { class: 'gd-rule-target gd-rule-compound', title: ruleTarget(rule) }, lines));
+      } else {
+        li.appendChild(el('span', { class: 'gd-rule-target', text: ruleTarget(rule) }));
+      }
       const fields = el('span', { class: 'gd-rule-fields' });
       if (rule.type === 'apart') {
         fields.appendChild(numInput(rule, 'k', 'at most'));

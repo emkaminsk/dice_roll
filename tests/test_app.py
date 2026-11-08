@@ -1859,7 +1859,8 @@ def test_gd_compound_count_rule_in_ui(page):
     page.fill("#gd-rule-min", "1")
     page.fill("#gd-rule-max", "2")
     page.click("#gd-rule-add")
-    assert page.text_content(".gd-rule .gd-rule-target") == "type = manager and team = 1"
+    assert page.eval_on_selector_all(".gd-rule .gd-cond-text", "els => els.map(e => e.textContent)") == ["type = manager", "team = 1"]
+    assert page.eval_on_selector_all(".gd-rule .gd-cond-and", "els => els.map(e => e.textContent)") == ["and"]
     assert page.locator(".gd-and-row").count() == 0  # form reset
     for _ in range(3):
         groups = _gd_draw(page)
@@ -1877,6 +1878,6 @@ def test_gd_compound_count_rule_in_ui(page):
     # Round-trips through autosave and drops when its option is removed.
     page.reload()
     _gd_open(page)
-    assert page.text_content(".gd-rule .gd-rule-target") == "type = manager and team = 1"
+    assert page.get_attribute(".gd-rule .gd-rule-target", "title") == "type = manager and team = 1"
     page.locator(".gd-attr-row").nth(2).locator(".gd-chip", has_text="manager").locator("button").click()
     assert page.locator(".gd-rule").count() == 0
