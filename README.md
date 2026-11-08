@@ -20,7 +20,7 @@ tab (linkable as `#group-draw`):
   crack is pure decoration. For entertainment only.
 - **🎯 Random Picker** — enter options and draw one at random; add as many independent picker sections as you like.
 - **🧩 Group Draw** (second tab) — define people with custom attributes, then draw them
-  into groups under per-group rules (size, counts, sums, keep apart/together). Strict
+  into groups under per-group rules (size, counts incl. combined `a = x and b = y` conditions, sums, keep apart/together). Strict
   mode explains impossible setups; "best effort" returns the closest split. Setups can
   be pasted, imported/exported as JSON, and are autosaved in this browser only. Full
   behaviour, algorithm and fairness notes: [`.ai/spec-group-draw.md`](.ai/spec-group-draw.md).
