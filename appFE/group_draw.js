@@ -25,7 +25,7 @@
     attrList: $('#gd-attr-list'), attrForm: $('#gd-attr-form'), attrName: $('#gd-attr-name'),
     attrKind: $('#gd-attr-kind'), attrOptions: $('#gd-attr-options'), attrOptionsField: $('#gd-attr-options-field'),
     attrError: $('#gd-attr-error'),
-    peopleCount: $('#gd-people-count'), peopleSummary: $('#gd-people-summary'), peopleEmpty: $('#gd-people-empty'),
+    peopleCount: $('#gd-people-count'), peopleSummary: $('#gd-people-summary'), peopleEmpty: $('#gd-people-empty'), peopleClear: $('#gd-people-clear'),
     tableWrap: $('#gd-table-wrap'), table: $('#gd-people-table'),
     addPerson: $('#gd-add-person'), pasteToggle: $('#gd-paste-toggle'), paste: $('#gd-paste'),
     pasteText: $('#gd-paste-text'), pastePreview: $('#gd-paste-preview'), pasteCancel: $('#gd-paste-cancel'),
@@ -496,6 +496,7 @@
     tbody.appendChild(frag);
     els.tableWrap.hidden = state.people.length === 0;
     els.peopleEmpty.hidden = state.people.length > 0;
+    els.peopleClear.hidden = state.people.length === 0;
     flagDuplicates();
   }
 
@@ -581,6 +582,12 @@
     if (!btn) return;
     const id = btn.closest('tr').dataset.personId;
     state.people = state.people.filter((p) => p.id !== id);
+    changed({ table: true });
+  });
+
+  els.peopleClear.addEventListener('click', () => {
+    if (!window.confirm(`Remove all ${plural(state.people.length, 'person', 'people')}? Attributes and rules are kept.`)) return;
+    state.people = [];
     changed({ table: true });
   });
 

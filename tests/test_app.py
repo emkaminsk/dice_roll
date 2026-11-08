@@ -1362,6 +1362,22 @@ def test_gd_reset_clears_everything(page):
     assert page.is_hidden("#gd-result-actions")
 
 
+def test_gd_people_clear_all(page):
+    """People section has a Clear all button: confirm required, removes people, keeps attributes."""
+    decisions = [False, True]
+    page.on("dialog", lambda d: d.accept() if decisions.pop(0) else d.dismiss())
+    page.click("#tab-group-draw")
+    assert page.is_hidden("#gd-people-clear")
+    page.click("#gd-load-example")
+    assert page.is_visible("#gd-people-clear")
+    page.click("#gd-people-clear")  # dismissed
+    assert page.locator("#gd-people-table tbody tr").count() == 30
+    page.click("#gd-people-clear")  # accepted
+    assert page.locator("#gd-people-table tbody tr").count() == 0
+    assert page.locator(".gd-attr-row").count() > 0
+    assert page.is_hidden("#gd-people-clear")
+
+
 def test_gd_editing_setup_marks_results_outdated(page):
     """Spec 4.5: after a draw, editing the people marks the results outdated; drawing again clears it."""
     page.emulate_media(reduced_motion="reduce")

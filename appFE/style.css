@@ -1184,6 +1184,9 @@ select.form-control:focus-visible { outline: none; }
 .gd-stepper-link.is-done .gd-step-num { background: var(--accent); color: #fff; }
 .gd-step h2 { display: flex; align-items: center; gap: 10px; }
 .gd-step { scroll-margin-top: 16px; }
+.gd-step-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.gd-step-head h2 { margin-bottom: 0.5rem; }
+.gd-step-head .btn { flex: none; }
 @media (max-width: 576px) {
   .gd-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
