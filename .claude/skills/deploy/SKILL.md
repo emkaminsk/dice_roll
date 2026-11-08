@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: How this app is released to production (the VPS behind https://diceroll.byst.re). Use when asked about deploying, releasing, or why the live site differs from the repo.
+description: Deploy/ship this app to production (the VPS behind https://diceroll.byst.re) — run tests, merge the current branch to master, push, verify. Use when asked to deploy, ship, or release, or why the live site differs from the repo.
 ---
 
 # Deploy
@@ -13,13 +13,30 @@ The site is static files; production is nginx on a VPS serving `/var/www/dicerol
 `workflow_dispatch`): it SSHes to the VPS, `git pull`s the repo there, and rsyncs
 `appFE/` into the web root with `--delete`.
 
-So the release process is simply:
+So the release process is simply: get the change onto `master` and push, then verify.
 
-1. Get the change onto `master` (via PR from a feature branch — never commit to
-   master directly from an agent session unless explicitly told to).
-2. The workflow deploys automatically. Verify via the Actions run and by loading
+## When asked to "deploy" or "ship"
+
+Such a request is the explicit go-ahead to merge the current branch into `master`
+and push (otherwise never commit/merge to master from an agent session). From the
+feature branch:
+
+1. **Pre-flight:** working tree clean (commit or ask about stray changes); note the
+   current branch name. If already on `master` with nothing to merge, skip steps 3–4.
+2. **Test:** run the full suite (skill `verify-app`: pytest + Playwright e2e). Stop
+   and report if anything fails — do not merge.
+3. `git checkout master && git pull --rebase`
+4. `git merge --no-ff <feature-branch>` (if the merge conflicts, stop and report;
+   don't resolve blindly).
+5. **Re-test on master**; stop and report on any failure (don't push).
+6. `git push`. If rejected, `git pull --rebase` and retry once; if it fails again,
+   stop and report.
+7. **Verify:** the push triggers the workflow — check the Actions run and load
    https://diceroll.byst.re/ (hard-refresh; assets aren't fingerprinted, so browsers
    may cache aggressively).
+8. **Report:** test count, merge commit hash, and the Actions run status.
+
+Don't delete the feature branch or force-push unless asked.
 
 ## Rules
 
