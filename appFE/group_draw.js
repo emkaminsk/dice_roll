@@ -1029,8 +1029,26 @@
   }
 
   function refreshAndRows() {
+    // Each attribute can appear once per rule: a row that clashes with the main
+    // attribute (or an earlier row) moves to a free one, or goes if none is left.
+    const used = { [els.ruleAttr.value]: true };
+    andRows().forEach((r) => {
+      fillAndRow(r);
+      if (used[r.attr.value]) {
+        const free = state.attributes.find((a) => !used[a.id]);
+        if (!free) { r.row.remove(); return; }
+        r.attr.value = free.id;
+        fillAndRow(r);
+      }
+      used[r.attr.value] = true;
+    });
+    // Grey out attributes already taken by the main condition or another row.
     const rows = andRows();
-    rows.forEach((r) => { if (!state.attributes.length) r.row.remove(); else fillAndRow(r); });
+    rows.forEach((r) => {
+      const taken = { [els.ruleAttr.value]: true };
+      rows.forEach((o) => { if (o !== r) taken[o.attr.value] = true; });
+      Array.from(r.attr.options).forEach((opt) => { opt.disabled = !!taken[opt.value]; });
+    });
     const total = andRows().length + 1;
     els.ruleAndAdd.disabled = state.attributes.length < 2 || total >= MAX_CONDITIONS || total >= state.attributes.length;
     els.ruleAndAdd.title = state.attributes.length < 2 ? 'Add a second attribute to combine conditions' : '';
@@ -1046,7 +1064,7 @@
     const used = {};
     used[els.ruleAttr.value] = true;
     andRows().forEach((r) => { used[r.attr.value] = true; });
-    attr.addEventListener('change', () => { fillAndRow({ attr, val, num }); });
+    attr.addEventListener('change', () => { fillAndRow({ attr, val, num }); refreshAndRows(); });
     del.addEventListener('click', () => { row.remove(); refreshAndRows(); });
     els.ruleAndRows.appendChild(row);
     const free = state.attributes.find((a) => !used[a.id]);

@@ -1865,15 +1865,15 @@ def test_gd_compound_count_rule_in_ui(page):
     for _ in range(3):
         groups = _gd_draw(page)
         assert len(groups) == 3
-    # A repeated attribute is refused.
-    page.select_option("#gd-rule-attr", "a-team")
-    page.fill("#gd-rule-value-num", "2")
+    # A clashing attribute is impossible: changing the main attribute moves the row on.
+    page.select_option("#gd-rule-attr", "a-type")
     page.click("#gd-rule-and-add")
-    page.select_option(".gd-and-attr", "a-team")
-    page.fill(".gd-and-num", "3")
-    page.fill("#gd-rule-min", "1")
-    page.click("#gd-rule-add")
-    assert "once per rule" in page.text_content("#gd-rule-error")
+    first = page.input_value(".gd-and-attr")
+    assert first != "a-type"
+    page.select_option("#gd-rule-attr", first)
+    assert page.input_value(".gd-and-attr") != first
+    assert page.eval_on_selector(".gd-and-attr option[value='%s']" % page.input_value("#gd-rule-attr"), "o => o.disabled")
+    page.click(".gd-and-del")
     assert page.locator(".gd-rule").count() == 1
     # Round-trips through autosave and drops when its option is removed.
     page.reload()
