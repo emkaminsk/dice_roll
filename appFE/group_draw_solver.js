@@ -74,6 +74,22 @@
       return scopeList(scope).indexOf(g) !== -1;
     }
 
+    // A count rule matches people having ALL of its conditions: the main
+    // attrId/value plus optional extra ones in rule.and. Duplicates collapse.
+    function conditionsOf(rule) {
+      const out = [];
+      const seen = {};
+      [{ attrId: rule.attrId, value: rule.value }].concat(Array.isArray(rule.and) ? rule.and : []).forEach((c) => {
+        const key = `${c && c.attrId}|${c ? keyOf(c.value) : null}`;
+        if (!seen[key]) { seen[key] = true; out.push({ attrId: c && c.attrId, value: c ? keyOf(c.value) : null }); }
+      });
+      return out;
+    }
+
+    function condText(conds, attrs) {
+      return conds.map((c) => `${attrs[c.attrId] ? attrs[c.attrId].name : '?'} = ${c.value}`).join(' and ');
+    }
+
     // A rule the solver can act on: known type, valid attribute of the right
     // kind (label attributes only in count rules, exact-text match), scope
     // inside the groups.
@@ -86,7 +102,17 @@
       if (rule.type === 'size') return true;
       const a = attrs[rule.attrId];
       if (!a) return false;
-      if (rule.type === 'count') return keyOf(rule.value) !== null;
+      if (rule.type === 'count') {
+        const conds = conditionsOf(rule);
+        const byAttr = {};
+        return conds.every((c) => {
+          if (!attrs[c.attrId] || c.value === null) return false;
+          // Two different values of one attribute can never both hold.
+          if (c.attrId in byAttr) return false;
+          byAttr[c.attrId] = true;
+          return true;
+        });
+      }
       if (a.kind === 'label') return false;
       if (rule.type === 'sum') return a.kind === 'integer';
       return rule.type === 'apart' || rule.type === 'together';
@@ -108,7 +134,7 @@
       const r = rangeText(rule.min, rule.max);
       switch (rule.type) {
         case 'size': return `Group size ${r} (${scope})`;
-        case 'count': return `${an} = ${rule.value}: ${r} (${scope})`;
+        case 'count': return `${condText(conditionsOf(rule), attrMap(setup))}: ${r} (${scope})`;
         case 'sum': return `Sum of ${an}: ${r} (${scope})`;
         case 'apart': {
           const k = Math.max(1, bound(rule.k) || 1);
@@ -173,16 +199,18 @@
         size = scoped(sizeRules, G, 0, Infinity);
       }
 
-      // Count constraints, one per (attribute, value).
+      // Count constraints, one per distinct set of conditions (order-free).
       const countMap = {};
       rules.filter((r) => r.type === 'count').forEach((r) => {
-        const key = `${r.attrId}|${keyOf(r.value)}`;
-        (countMap[key] = countMap[key] || { attrId: r.attrId, value: keyOf(r.value), rules: [] }).rules.push(r);
+        const conds = conditionsOf(r);
+        const key = conds.map((c) => `${c.attrId}|${c.value}`).sort().join('&');
+        (countMap[key] = countMap[key] || { conds, rules: [] }).rules.push(r);
       });
       const counts = Object.keys(countMap).map((key) => {
         const c = countMap[key];
-        return Object.assign({ key, attrId: c.attrId, value: c.value }, scoped(c.rules, G, 0, Infinity));
+        return Object.assign({ key, conds: c.conds, label: condText(c.conds, attrs) }, scoped(c.rules, G, 0, Infinity));
       });
+      const matches = (p, conds) => conds.every((c) => keyOf(val(p, c.attrId)) === c.value);
 
       const sumMap = {};
       rules.filter((r) => r.type === 'sum').forEach((r) => {
@@ -212,7 +240,7 @@
       // Per-person aggregates: [index, amount] pairs for each constraint family.
       const aggs = people.map((p) => {
         const agg = { size: 1, c: [], s: [], a: [] };
-        counts.forEach((c, ci) => { if (keyOf(val(p, c.attrId)) === c.value) agg.c.push([ci, 1]); });
+        counts.forEach((c, ci) => { if (matches(p, c.conds)) agg.c.push([ci, 1]); });
         sums.forEach((s, si) => {
           const v = bound(val(p, s.attrId));
           if (v) agg.s.push([si, v]);
@@ -253,7 +281,7 @@
         sums.map((s) => [s.min[g], s.max[g]]),
       ]));
 
-      return { setup, G, n, people, rules, balance, size, counts, sums, aparts, aggs, blocks, sig };
+      return { setup, G, n, people, rules, balance, size, counts, sums, aparts, aggs, blocks, sig, matches };
     }
 
     function mergeAggs(list) {
@@ -335,8 +363,7 @@
         push(g, sz < m.size.min[g] ? m.size.minSrc[g] : m.size.maxSrc[g], 'size', sz, m.size.min[g], m.size.max[g], 'size');
         m.counts.forEach((con, ci) => {
           const x = st.cnt[ci][g];
-          const a = attrs[con.attrId];
-          push(g, x < con.min[g] ? con.minSrc[g] : con.maxSrc[g], `count of ${a ? a.name : '?'} = ${con.value}`, x, con.min[g], con.max[g], 'count');
+          push(g, x < con.min[g] ? con.minSrc[g] : con.maxSrc[g], `count of ${con.label}`, x, con.min[g], con.max[g], 'count');
         });
         m.sums.forEach((con, si) => {
           const x = st.sum[si][g];
@@ -753,9 +780,8 @@
       if (sMax < m.n) err(`Group-size maximums only fit ${sMax} people, but there are ${m.n}.`, ids(m.size));
 
       m.counts.forEach((con) => {
-        const a = attrs[con.attrId];
-        const label = `“${a.name} = ${con.value}”`;
-        const have = m.people.filter((p) => keyOf(p.values && p.values[con.attrId]) === con.value).length;
+        const label = `“${con.label}”`;
+        const have = m.people.filter((p) => m.matches(p, con.conds)).length;
         const need = sum(con.min);
         const room = sum(con.max);
         const uniformMin = con.min.every((x) => x === con.min[0]);

@@ -119,6 +119,12 @@ Rule types:
    empty labels never count): `min` and `max` number of such people in the group.
    Either bound may be blank. Examples: `type = manager`: min 1, max 2, scope All
    groups; `surname = Smith`: max 1.
+   **Compound conditions:** a count rule may add up to 3 extra `and attribute = value`
+   conditions (max 4, each attribute at most once); it then counts only people
+   matching *all* of them, e.g. `team = red and gender = male`: min 1, max 2. Rules
+   with the same condition set intersect; different sets are independent counters
+   (a person can count towards several). Deleting an attribute or option used by
+   any condition removes the whole rule (dropping a condition would broaden it).
 3. **Sum rule (integer attributes only)** — min/max of the *sum* of the attribute
    within a group. (Average is deliberately not offered in v1: it is awkward with
    varying group sizes.)
@@ -258,7 +264,7 @@ State shape (in-memory single object):
   people:     [{ id, name, values: { [attrId]: string|number|null } }],
   groups:     { count, names: string[] },
   rules:      [{ id, type: 'size'|'count'|'sum'|'apart'|'together',
-                 scope: 'all'|groupIndex|groupIndex[], attrId?, value?, min?, max?, k? }],
+                 scope: 'all'|groupIndex|groupIndex[], attrId?, value?, and?: [{attrId, value}] /* count */, min?, max?, k? }],
   options:    { balance: true, bestEffort: false },
   results:    [/* history */]
 }
@@ -293,6 +299,8 @@ fixture already fails on console errors). Pure-solver tests via
 4. Rules: count/size/sum/apart/together can be created; scope all vs one group;
    override works; live hints appear for impossible setups (the 5×2-vs-7
    consultants example).
+   A count rule can combine conditions with "+ and condition" (AND; repeated
+   attribute refused; counts only people matching all conditions).
    Label attributes appear as count-rule targets (value dropdown of distinct
    values present) but not for sum/apart/together.
 5. Draw (strict): every person appears in exactly one group; all rules satisfied
