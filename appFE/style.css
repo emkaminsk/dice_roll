@@ -1785,3 +1785,23 @@ body > .home-link > a {
 /* In dark mode the corner buttons are the same tone as the page: give them a hairline edge. */
 :root[data-theme="dark"] .theme-toggle { box-shadow: 0 0 0 1px var(--border), 0 2px 8px rgba(0, 0, 0, 0.4); }
 :root[data-theme="dark"] body > .home-link > a { box-shadow: 0 0 0 1px var(--border), 0 2px 8px rgba(0, 0, 0, 0.4) !important; }
+
+/* Count rule: extra "and" conditions */
+.gd-and { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.gd-and[hidden] { display: none; }
+.gd-and-rows { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.gd-and-row {
+  display: grid; grid-template-columns: 2.4em minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center; gap: 6px;
+  animation: gd-row-in 0.18s ease-out;
+}
+.gd-and-row .form-control { width: 100%; max-width: none; min-width: 0; }
+.gd-and-row [hidden] { display: none; }
+.gd-and-word {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--accent); min-width: 2.2em;
+}
+.gd-and-eq { color: var(--muted, inherit); }
+.gd-and-del { padding: 0 6px; }
+.gd-and-add { border-style: dashed; }
+@media (prefers-reduced-motion: reduce) { .gd-and-row { animation: none; } }

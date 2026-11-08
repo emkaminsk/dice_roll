@@ -34,6 +34,7 @@
     balanceNote: $('#gd-balance-note'), bestEffort: $('#gd-best-effort'),
     ruleList: $('#gd-rule-list'), rulesEmpty: $('#gd-rules-empty'), rulesNotice: $('#gd-rules-notice'),
     ruleForm: $('#gd-rule-form'), ruleType: $('#gd-rule-type'), ruleAttr: $('#gd-rule-attr'),
+    ruleAnd: $('#gd-rule-and'), ruleAndRows: $('#gd-rule-and-rows'), ruleAndAdd: $('#gd-rule-and-add'),
     ruleValue: $('#gd-rule-value'), ruleValueNum: $('#gd-rule-value-num'), ruleValues: $('#gd-rule-values'),
     ruleMin: $('#gd-rule-min'), ruleMax: $('#gd-rule-max'), ruleK: $('#gd-rule-k'), ruleScope: $('#gd-rule-scope'),
     ruleAdd: $('#gd-rule-add'), ruleHelp: $('#gd-rule-help'), ruleError: $('#gd-rule-error'), hints: $('#gd-hints'),
@@ -227,6 +228,19 @@
     return scope === 'all' || scope === undefined || scope === null ? null : (Array.isArray(scope) ? scope : [scope]);
   }
 
+  const MAX_CONDITIONS = 4; // attribute = value conditions in one count rule
+
+  // A count rule's conditions: the main attrId/value plus optional extras in rule.and.
+  function ruleConds(rule) {
+    return [{ attrId: rule.attrId, value: rule.value }].concat(rule.and || []);
+  }
+  function ruleUsesAttr(r, attrId) {
+    return r.type === 'count' ? ruleConds(r).some((c) => c.attrId === attrId) : r.attrId === attrId;
+  }
+  function condsKey(rule) {
+    return ruleConds(rule).map((c) => `${c.attrId}|${c.value}`).sort().join('&');
+  }
+
   function cleanRule(r, attributes, count) {
     const scope = cleanScope(r.scope, count);
     if (scope === null) return null;
@@ -238,7 +252,22 @@
     if (r.type === 'sum') return attr.kind === 'integer' ? Object.assign(rule, { scope, min: num(r.min), max: num(r.max) }) : null;
     if (r.type === 'count') {
       const value = cleanValue(attr, r.value);
-      return value === null || (attr.kind === 'label' && !value.trim()) ? null : Object.assign(rule, { scope, value, min: num(r.min), max: num(r.max) });
+      if (value === null || (attr.kind === 'label' && !value.trim())) return null;
+      Object.assign(rule, { scope, value, min: num(r.min), max: num(r.max) });
+      if (Array.isArray(r.and) && r.and.length) {
+        const seen = { [attr.id]: true };
+        const and = [];
+        for (const c of r.and.slice(0, MAX_CONDITIONS - 1)) {
+          const a2 = c && attributes.find((a) => a.id === c.attrId);
+          const v2 = a2 ? cleanValue(a2, c.value) : null;
+          // Drop a rule whose extra condition is invalid (it would silently broaden).
+          if (!a2 || v2 === null || (a2.kind === 'label' && !v2.trim()) || seen[a2.id]) return null;
+          seen[a2.id] = true;
+          and.push({ attrId: a2.id, value: v2 });
+        }
+        rule.and = and;
+      }
+      return rule;
     }
     if (r.type === 'apart') return Object.assign(rule, { scope: 'all', k: Math.max(1, num(r.k) || 1) });
     const values = Array.isArray(r.values) ? r.values.map((v) => cleanValue(attr, v)).filter((v) => v !== null) : [];
@@ -303,7 +332,7 @@
   // ---- Step 1: attributes --------------------------------------------------
 
   function attrInUse(attr) {
-    return state.people.some((p) => !isEmptyValue(p.values[attr.id])) || state.rules.some((r) => r.attrId === attr.id);
+    return state.people.some((p) => !isEmptyValue(p.values[attr.id])) || state.rules.some((r) => ruleUsesAttr(r, attr.id));
   }
 
   function validAttrName(name, exceptId) {
@@ -393,16 +422,17 @@
       return;
     }
     const usedBy = state.people.filter((p) => p.values[attr.id] === opt).length;
-    const rulesHit = state.rules.filter((r) => r.attrId === attr.id &&
-      ((r.type === 'count' && r.value === opt) || (r.type === 'together' && (r.values || []).indexOf(opt) !== -1)));
+    const countHit = (r) => r.type === 'count' && ruleConds(r).some((c) => c.attrId === attr.id && c.value === opt);
+    const rulesHit = state.rules.filter((r) => countHit(r) ||
+      (r.type === 'together' && r.attrId === attr.id && (r.values || []).indexOf(opt) !== -1));
     if ((usedBy || rulesHit.length) && !window.confirm(
       `Remove option “${opt}”? ${plural(usedBy, 'person', 'people')} will lose this value and ${plural(rulesHit.length, 'rule')} will change.`)) return;
     attr.options = attr.options.filter((o) => o !== opt);
     state.people.forEach((p) => { if (p.values[attr.id] === opt) p.values[attr.id] = null; });
     let removed = 0;
     state.rules = state.rules.filter((r) => {
+      if (countHit(r)) { removed++; return false; }
       if (r.attrId !== attr.id) return true;
-      if (r.type === 'count' && r.value === opt) { removed++; return false; }
       if (r.type === 'together' && r.values && r.values.indexOf(opt) !== -1) {
         r.values = r.values.filter((v) => v !== opt);
         if (!r.values.length) { removed++; return false; }
@@ -418,7 +448,7 @@
     const before = state.rules.length;
     state.attributes = state.attributes.filter((a) => a !== attr);
     state.people.forEach((p) => { delete p.values[attr.id]; });
-    state.rules = state.rules.filter((r) => r.attrId !== attr.id);
+    state.rules = state.rules.filter((r) => !ruleUsesAttr(r, attr.id));
     const removed = before - state.rules.length;
     if (removed) notice(els.rulesNotice, `Removed ${plural(removed, 'rule')} that used “${attr.name}”.`);
     changed({ attrs: true, table: true, rules: true });
@@ -913,7 +943,7 @@
   }
 
   const RULE_HELP = {
-    count: 'How many people with this value each group may have.',
+    count: 'How many people with this value each group may have. Add “and” conditions to count only people matching all of them.',
     size: 'How many people a group may have.',
     sum: 'Bounds on the total of a number within a group.',
     apart: 'No more than this many people sharing a value in one group (1 = all different).',
@@ -959,6 +989,7 @@
     if (noLabels) els.ruleValue.appendChild(el('option', { value: '', text: 'No values yet' }));
     els.ruleValue.disabled = noLabels;
     els.ruleAdd.disabled = missing || noLabels;
+    refreshAndRows();
     if (missing) {
       els.ruleHelp.textContent = type === 'sum' ? 'Add a number attribute first.'
         : type === 'count' ? 'Add an attribute first.'
@@ -971,6 +1002,60 @@
       els.ruleHelp.textContent = RULE_HELP[type];
     }
   }
+
+  // ---- "and" conditions of a count rule ---------------------------------------
+
+  function andRows() {
+    return Array.from(els.ruleAndRows.querySelectorAll('.gd-and-row')).map((row) => ({
+      row, attr: row.querySelector('.gd-and-attr'), val: row.querySelector('.gd-and-val'), num: row.querySelector('.gd-and-num'),
+    }));
+  }
+
+  // Fills one row's attribute list and value picker, keeping the current picks when still valid.
+  function fillAndRow(r) {
+    const prevAttr = r.attr.value;
+    r.attr.innerHTML = '';
+    state.attributes.forEach((a) => r.attr.appendChild(el('option', { value: a.id, text: `${a.name} (${KIND_LABEL[a.kind].toLowerCase()})` })));
+    if (state.attributes.some((a) => a.id === prevAttr)) r.attr.value = prevAttr;
+    const a = attrById(r.attr.value);
+    const isNum = !!a && a.kind === 'integer';
+    const prev = r.val.value;
+    r.val.hidden = isNum;
+    r.num.hidden = !isNum;
+    r.val.innerHTML = '';
+    const values = !a || isNum ? [] : (a.kind === 'category' ? a.options : labelValues(a));
+    values.forEach((o) => r.val.appendChild(el('option', { value: o, text: o })));
+    if (values.indexOf(prev) !== -1) r.val.value = prev;
+  }
+
+  function refreshAndRows() {
+    const rows = andRows();
+    rows.forEach((r) => { if (!state.attributes.length) r.row.remove(); else fillAndRow(r); });
+    const total = andRows().length + 1;
+    els.ruleAndAdd.disabled = state.attributes.length < 2 || total >= MAX_CONDITIONS || total >= state.attributes.length;
+    els.ruleAndAdd.title = state.attributes.length < 2 ? 'Add a second attribute to combine conditions' : '';
+  }
+
+  function addAndRow() {
+    const attr = el('select', { class: 'form-control form-control-sm gd-and-attr', 'aria-label': 'Also attribute' });
+    const val = el('select', { class: 'form-control form-control-sm gd-and-val', 'aria-label': 'Also value' });
+    const num = el('input', { type: 'text', inputmode: 'numeric', class: 'form-control form-control-sm gd-and-num', placeholder: 'e.g. 3', hidden: true, 'aria-label': 'Also value', autocomplete: 'off' });
+    const del = el('button', { type: 'button', class: 'btn btn-link btn-remove gd-and-del', 'aria-label': 'Remove this condition', text: '×' });
+    const row = el('div', { class: 'gd-and-row' }, [el('span', { class: 'gd-and-word', text: 'and' }), attr, el('span', { class: 'gd-and-eq', text: '=' }), val, num, del]);
+    // Pick the first attribute not already used by the main condition or other rows.
+    const used = {};
+    used[els.ruleAttr.value] = true;
+    andRows().forEach((r) => { used[r.attr.value] = true; });
+    attr.addEventListener('change', () => { fillAndRow({ attr, val, num }); });
+    del.addEventListener('click', () => { row.remove(); refreshAndRows(); });
+    els.ruleAndRows.appendChild(row);
+    const free = state.attributes.find((a) => !used[a.id]);
+    fillAndRow({ attr, val, num });
+    if (free) { attr.value = free.id; fillAndRow({ attr, val, num }); }
+    refreshAndRows();
+    attr.focus();
+  }
+  els.ruleAndAdd.addEventListener('click', addAndRow);
 
   els.ruleType.addEventListener('change', () => { els.ruleError.textContent = ''; renderRuleForm(); });
   els.ruleAttr.addEventListener('change', renderValueField);
@@ -994,6 +1079,24 @@
           if (!els.ruleValue.value) return fail('Pick a value.');
           rule.value = els.ruleValue.value;
         }
+        const and = [];
+        const used = { [a.id]: true };
+        for (const row of andRows()) {
+          const a2 = attrById(row.attr.value);
+          if (!a2) return fail('Pick an attribute for every “and” condition.');
+          if (used[a2.id]) return fail(`Each attribute can be used once per rule (“${a2.name}” repeats).`);
+          used[a2.id] = true;
+          let v2;
+          if (a2.kind === 'integer') {
+            if (!isInt(row.num.value)) return fail(`Enter a whole-number value for ${a2.name}.`);
+            v2 = parseInt(row.num.value, 10);
+          } else {
+            if (!row.val.value) return fail(`Pick a value for ${a2.name}.`);
+            v2 = row.val.value;
+          }
+          and.push({ attrId: a2.id, value: v2 });
+        }
+        if (and.length) rule.and = and;
       }
       if (type === 'apart') {
         const k = els.ruleK.value.trim();
@@ -1026,6 +1129,8 @@
     els.ruleMin.value = '';
     els.ruleMax.value = '';
     els.ruleValues.value = '';
+    els.ruleAndRows.innerHTML = '';
+    refreshAndRows();
     notice(els.rulesNotice, '');
     changed({ rules: true, groups: type === 'size' });
   });
@@ -1033,14 +1138,15 @@
   function overrides(rule) {
     if (!scopeGroups(rule.scope) || rule.type === 'apart' || rule.type === 'together') return false;
     return state.rules.some((r) => r !== rule && r.type === rule.type && r.scope === 'all' &&
-      (rule.type === 'size' || (r.attrId === rule.attrId && (rule.type === 'sum' || String(r.value) === String(rule.value)))));
+      (rule.type === 'size' || (rule.type === 'count' ? condsKey(r) === condsKey(rule)
+        : r.attrId === rule.attrId)));
   }
 
   function ruleTarget(rule) {
     const a = attrById(rule.attrId);
     switch (rule.type) {
       case 'size': return 'Group size';
-      case 'count': return `${a.name} = ${rule.value}`;
+      case 'count': return ruleConds(rule).map((c) => `${attrById(c.attrId).name} = ${c.value}`).join(' and ');
       case 'sum': return `Sum of ${a.name}`;
       case 'apart': return `Keep apart by ${a.name}`;
       default: return `Keep together by ${a.name}${rule.values && rule.values.length ? ` (${rule.values.join(', ')})` : ''}`;
@@ -1334,7 +1440,10 @@ self.onmessage = function (e) {
     setup.people.forEach((p) => { byId[p.id] = p; });
     const attrs = setup.attributes;
     const ruleAttrIds = {};
-    setup.rules.forEach((r) => { if (r.attrId) ruleAttrIds[r.attrId] = true; });
+    setup.rules.forEach((r) => {
+      if (r.type === 'count') ruleConds(r).forEach((c) => { ruleAttrIds[c.attrId] = true; });
+      else if (r.attrId) ruleAttrIds[r.attrId] = true;
+    });
     return {
       no: drawSeq,
       time: new Date(),
@@ -1344,7 +1453,7 @@ self.onmessage = function (e) {
       attrs,
       ruleAttrIds,
       countTargets: setup.rules.filter((r) => r.type === 'count')
-        .map((r) => ({ attrId: r.attrId, value: r.value }))
+        .reduce((acc, r) => acc.concat(ruleConds(r).map((c) => ({ attrId: c.attrId, value: c.value }))), [])
         .filter((t, i, arr) => arr.findIndex((x) => x.attrId === t.attrId && String(x.value) === String(t.value)) === i),
       sumAttrs: setup.rules.filter((r) => r.type === 'sum').map((r) => r.attrId).filter((x, i, arr) => arr.indexOf(x) === i),
       groups: result.groups.map((ids, g) => ({

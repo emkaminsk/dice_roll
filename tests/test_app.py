@@ -693,7 +693,8 @@ def _gd_check(setup, groups):
             if sc != "all" and gi not in (sc if isinstance(sc, list) else [sc]):
                 continue
             if r["type"] == "count":
-                c = sum(1 for v in vals if v.get(r["attrId"]) == r["value"])
+                conds = [{"attrId": r["attrId"], "value": r["value"]}] + r.get("and", [])
+                c = sum(1 for v in vals if all(v.get(x["attrId"]) == x["value"] for x in conds))
             elif r["type"] == "size":
                 c = len(ids)
             elif r["type"] == "sum":
@@ -1791,3 +1792,91 @@ def test_theme_toggle_does_not_disturb_tools(page):
     page.fill("#max", "20")
     page.click("#theme-toggle")
     assert page.input_value("#max") == "20"
+
+
+# --- Group Draw: compound count rules (attr = value AND attr = value) ---------
+
+def _gd_compound_people(n=54):
+    """Team 1-3 (integer) x type (category); 'department' is stored in the label attribute a-sur."""
+    types = ["consultant", "developer", "manager"]
+    return [{"id": f"p{i}", "name": f"P{i}",
+             "values": {"a-team": (i % 3) + 1, "a-type": types[(i // 3) % 3], "a-sur": f"dep{i % 2}"}}
+            for i in range(n)]
+
+
+def test_gd_compound_count_rules_honoured_by_solver(page):
+    """Two overlapping compound rules (the 'team=1 and manager' / 'dep0 and manager' pattern) hold in every group."""
+    setup = _gd_setup(people=_gd_compound_people(), groups=3, rules=[
+        {"id": "c1", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager",
+         "and": [{"attrId": "a-team", "value": 1}], "min": 1, "max": 2},
+        {"id": "c2", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager",
+         "and": [{"attrId": "a-sur", "value": "dep0"}], "min": 1, "max": 3},
+    ])
+    for _ in range(8):
+        res = _gd_run(page, setup)
+        assert res["status"] == "ok"
+        assert _gd_check(setup, res["groups"]) == []
+
+
+def test_gd_compound_count_rule_hint_and_infeasible(page):
+    """Only 2 people match both conditions, so min 1 in each of 3 groups is hinted with the combined label."""
+    people = _gd_compound_people()
+    for p in people:
+        p["values"]["a-type"] = "developer"
+    people[0]["values"]["a-type"] = "manager"; people[0]["values"]["a-team"] = 1
+    people[1]["values"]["a-type"] = "manager"; people[1]["values"]["a-team"] = 1
+    for p in people[2:]:
+        if p["values"]["a-team"] == 1:
+            p["values"]["a-team"] = 2
+    setup = _gd_setup(people=people, groups=3, rules=[
+        {"id": "c1", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager",
+         "and": [{"attrId": "a-team", "value": 1}], "min": 1, "max": None}])
+    hints = page.evaluate("s => GroupDrawSolver.validateHints(s)", setup)
+    assert any(h["level"] == "error" and "type = manager and team = 1" in h["message"] and "c1" in h["ruleIds"] for h in hints)
+    assert _gd_run(page, setup)["status"] == "infeasible"
+
+
+def test_gd_compound_rule_with_contradicting_conditions_is_ignored(page):
+    """Two values of one attribute can never both hold; the solver skips the rule instead of failing."""
+    setup = _gd_setup(people=_gd_compound_people(), groups=3, rules=[
+        {"id": "c1", "type": "count", "scope": "all", "attrId": "a-team", "value": 1,
+         "and": [{"attrId": "a-team", "value": 2}], "min": 5, "max": None}])
+    assert _gd_run(page, setup)["status"] == "ok"
+
+
+def test_gd_compound_count_rule_in_ui(page):
+    """Build 'type = manager and team = 1' in the form, draw, then removing the used option drops the rule."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(people=_gd_compound_people(), groups=3))
+    page.select_option("#gd-rule-type", "count")
+    page.select_option("#gd-rule-attr", "a-type")
+    page.select_option("#gd-rule-value", "manager")
+    page.click("#gd-rule-and-add")
+    assert page.locator(".gd-and-row").count() == 1
+    page.select_option(".gd-and-attr", "a-team")
+    page.fill(".gd-and-num", "1")
+    page.fill("#gd-rule-min", "1")
+    page.fill("#gd-rule-max", "2")
+    page.click("#gd-rule-add")
+    assert page.text_content(".gd-rule .gd-rule-target") == "type = manager and team = 1"
+    assert page.locator(".gd-and-row").count() == 0  # form reset
+    for _ in range(3):
+        groups = _gd_draw(page)
+        assert len(groups) == 3
+    # A repeated attribute is refused.
+    page.select_option("#gd-rule-attr", "a-team")
+    page.fill("#gd-rule-value-num", "2")
+    page.click("#gd-rule-and-add")
+    page.select_option(".gd-and-attr", "a-team")
+    page.fill(".gd-and-num", "3")
+    page.fill("#gd-rule-min", "1")
+    page.click("#gd-rule-add")
+    assert "once per rule" in page.text_content("#gd-rule-error")
+    assert page.locator(".gd-rule").count() == 1
+    # Round-trips through autosave and drops when its option is removed.
+    page.reload()
+    _gd_open(page)
+    assert page.text_content(".gd-rule .gd-rule-target") == "type = manager and team = 1"
+    page.locator(".gd-attr-row").nth(2).locator(".gd-chip", has_text="manager").locator("button").click()
+    assert page.locator(".gd-rule").count() == 0
