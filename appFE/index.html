@@ -287,7 +287,10 @@
         <section class="tool-card gd-step" id="gd-step-people" aria-labelledby="gd-people-title">
           <div class="gd-step-head">
             <h2 id="gd-people-title"><span class="gd-step-num">2</span> People</h2>
-            <button type="button" id="gd-people-clear" class="btn btn-outline-secondary btn-sm" hidden>Clear all</button>
+            <div class="gd-step-actions">
+              <button type="button" id="gd-people-present" class="btn btn-outline-secondary btn-sm" hidden>Everyone’s here</button>
+              <button type="button" id="gd-people-clear" class="btn btn-outline-secondary btn-sm" hidden>Clear all</button>
+            </div>
           </div>
           <div class="gd-people-head">
             <p id="gd-people-count" class="gd-count">0 people</p>
@@ -351,9 +354,12 @@
                 <option value="sum">Sum of a number</option>
                 <option value="apart">Keep apart</option>
                 <option value="together">Keep together</option>
+                <option value="even">Spread evenly</option>
+                <option value="pin">Pin a person to a group</option>
+                <option value="pair">Two people together / apart</option>
               </select>
             </div>
-            <div class="gd-field" data-for="count sum apart together">
+            <div class="gd-field" data-for="count sum apart together even">
               <label for="gd-rule-attr">Attribute</label>
               <select id="gd-rule-attr" class="form-control form-control-sm"></select>
             </div>
@@ -365,6 +371,32 @@
             <div class="gd-field gd-field-wide gd-and" id="gd-rule-and" data-for="count">
               <div id="gd-rule-and-rows" class="gd-and-rows"></div>
               <button type="button" id="gd-rule-and-add" class="btn btn-outline-secondary btn-sm gd-and-add">+ and condition</button>
+            </div>
+            <div class="gd-field" data-for="even">
+              <label for="gd-rule-by">Balance</label>
+              <select id="gd-rule-by" class="form-control form-control-sm">
+                <option value="value">how many of each value</option>
+                <option value="sum">the total (sum)</option>
+              </select>
+            </div>
+            <div class="gd-field" data-for="pin pair">
+              <label for="gd-rule-person">Person</label>
+              <select id="gd-rule-person" class="form-control form-control-sm"></select>
+            </div>
+            <div class="gd-field" data-for="pin">
+              <label for="gd-rule-group">Group</label>
+              <select id="gd-rule-group" class="form-control form-control-sm"></select>
+            </div>
+            <div class="gd-field" data-for="pair">
+              <label for="gd-rule-mode">Must be</label>
+              <select id="gd-rule-mode" class="form-control form-control-sm">
+                <option value="together">together with</option>
+                <option value="apart">apart from</option>
+              </select>
+            </div>
+            <div class="gd-field" data-for="pair">
+              <label for="gd-rule-person2">Other person</label>
+              <select id="gd-rule-person2" class="form-control form-control-sm"></select>
             </div>
             <div class="gd-field gd-field-wide" data-for="together">
               <label for="gd-rule-values">Only these values (optional)</label>
@@ -385,6 +417,13 @@
             <div class="gd-field" data-for="size count sum">
               <label for="gd-rule-scope">Applies to</label>
               <div id="gd-rule-scope" class="gd-scope-host"></div>
+            </div>
+            <div class="gd-field" data-for="count sum apart even pin pair">
+              <label for="gd-rule-soft">Priority</label>
+              <select id="gd-rule-soft" class="form-control form-control-sm">
+                <option value="must">Must</option>
+                <option value="soft">Nice to have</option>
+              </select>
             </div>
             <div class="gd-field gd-field-action">
               <button type="submit" id="gd-rule-add" class="btn btn-primary btn-sm">Add rule</button>
@@ -407,9 +446,19 @@
             <label class="gd-check gd-show-attrs"><input type="checkbox" id="gd-show-attrs"> Show attributes</label>
             <label class="gd-check gd-partial" id="gd-partial-wrap"><input type="checkbox" id="gd-partial" disabled> Partial redraw</label>
           </div>
+          <div class="gd-draw-bar gd-draw-more">
+            <label class="gd-rounds-field" for="gd-rounds">Rounds
+              <input type="number" id="gd-rounds" class="form-control form-control-sm narrow-input" min="1" max="10" value="1" inputmode="numeric">
+            </label>
+            <label class="gd-check" id="gd-fresh-wrap" title="Tries not to put people together who already shared a group in an earlier draw of this session"><input type="checkbox" id="gd-fresh"> Avoid repeat pairings</label>
+          </div>
+          <p id="gd-rounds-hint" class="gd-help muted" hidden>Several rounds are drawn in one go; each round mixes people so that as few pairs as possible meet again.</p>
           <p id="gd-partial-hint" class="gd-help muted" role="status" hidden></p>
           <p id="gd-status" class="result-line" aria-live="polite"></p>
           <div id="gd-alert" class="gd-alert" hidden></div>
+          <div id="gd-notes" class="gd-alert is-note" hidden></div>
+          <div id="gd-rounds-nav" class="gd-rounds-nav" hidden></div>
+          <p id="gd-adjust-hint" class="gd-help muted gd-adjust-hint" role="status" hidden></p>
           <div id="gd-results-wrap" class="gd-results-wrap">
             <p id="gd-outdated" class="gd-outdated" hidden>Setup changed since this draw — press Draw again to refresh.</p>
             <div id="gd-results" class="team-results gd-results"></div>
@@ -417,6 +466,7 @@
           <div id="gd-result-actions" class="btn-row" hidden>
             <button type="button" id="gd-copy" class="btn btn-outline-secondary btn-sm">Copy as text</button>
             <button type="button" id="gd-csv" class="btn btn-outline-secondary btn-sm">Download CSV</button>
+            <button type="button" id="gd-present" class="btn btn-outline-secondary btn-sm">🎬 Present</button>
           </div>
           <div id="gd-copy-fallback" class="gd-copy-fallback" hidden>
             <label for="gd-copy-text">Copy the result from here:</label>
@@ -426,8 +476,8 @@
             <h3 class="gd-subhead">This session</h3>
             <ol id="gd-history" class="gd-history"></ol>
           </div>
-          <p class="gd-fair muted" title="Every draw uses cryptographically secure randomness. With no rules, or only rules a random shuffle can satisfy, every split is equally likely. When rules need searching (keep together, tight limits), splits are random but not uniform among all valid ones; the repair and best-effort fallbacks are not uniform either.">
-            🎲 Fair draw: cryptographically secure randomness. With no rules, or rules a shuffle can satisfy, every split is equally likely; when rules need searching (e.g. keep together, tight limits) splits are random but not uniform.</p>
+          <p class="gd-fair muted" title="Every draw uses cryptographically secure randomness. With no rules, or only rules a random shuffle can satisfy, every split is equally likely. When rules need searching (keep together, tight limits), splits are random but not uniform among all valid ones; the repair and best-effort fallbacks, nice-to-have rules, balancing a total and avoiding repeat pairings are random searches too, so not uniform either.">
+            🎲 Fair draw: cryptographically secure randomness. With no rules, or rules a shuffle can satisfy, every split is equally likely; when rules need searching (e.g. keep together, tight limits, nice-to-have rules, avoiding repeat pairings) splits are random but not uniform.</p>
         </section>
       </div>
     </main>

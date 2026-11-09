@@ -10,6 +10,13 @@
     const FAST_MS = 250;
     const BLAME_RULES = 30;
     const BLAME_MS = 200;
+    const FULL_MS = 300; // budget for "every rule, nice-to-have included" before falling back
+    const POLISH_MS = 400;
+    const MAX_ROUNDS = 10;
+    const EPS = 1e-9;
+    // Rule types that can be marked nice-to-have (rule.soft). Size and the
+    // structural keep-together rules are always "must".
+    const SOFTABLE = { count: true, sum: true, apart: true, even: true, pin: true, pair: true };
 
     function now() {
       return typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -90,18 +97,49 @@
       return conds.map((c) => `${attrs[c.attrId] ? attrs[c.attrId].name : '?'} = ${c.value}`).join(' and ');
     }
 
+    // Nice-to-have rules are optimised after the must rules are met. Balancing
+    // a total ("spread evenly" by sum) is an objective, so it is always soft.
+    function isSoft(rule) {
+      if (!rule) return false;
+      if (rule.type === 'even' && rule.by === 'sum') return true;
+      if (rule.type === 'pair' && rule.mode !== 'apart') return false;
+      return !!rule.soft && !!SOFTABLE[rule.type];
+    }
+
+    // People taking part in the draw: named and not marked absent.
+    function activePeople(setup) {
+      return (setup.people || []).filter((p) => p && !p.absent && String(p.name || '').trim() !== '');
+    }
+
+    function pairPeople(rule, byId) {
+      const seen = {};
+      return (Array.isArray(rule.people) ? rule.people : []).filter((id) => {
+        if (!byId[id] || seen[id]) return false;
+        seen[id] = true;
+        return true;
+      });
+    }
+
+    function personName(setup, id) {
+      const p = (setup.people || []).find((x) => x && x.id === id);
+      return p ? String(p.name || '').trim() || '?' : '?';
+    }
+
     // A rule the solver can act on: known type, valid attribute of the right
-    // kind (label attributes only in count rules, exact-text match), scope
-    // inside the groups.
-    function usable(rule, attrs, G) {
+    // kind (labels match exact text), scope inside the groups, and — for
+    // person rules — people who take part in this draw.
+    function usable(rule, attrs, G, byId) {
       if (!rule) return false;
       if (!isAllScope(rule.scope)) {
         const list = scopeList(rule.scope);
         if (!list.length || !list.every((g) => Number.isInteger(g) && g >= 0 && g < G)) return false;
       }
       if (rule.type === 'size') return true;
+      if (rule.type === 'pin') return !!byId[rule.personId] && Number.isInteger(rule.group) && rule.group >= 0 && rule.group < G;
+      if (rule.type === 'pair') return (rule.mode === 'apart' || rule.mode === 'together') && pairPeople(rule, byId).length >= 2;
       const a = attrs[rule.attrId];
       if (!a) return false;
+      if (rule.type === 'even') return rule.by === 'sum' ? a.kind === 'integer' : true;
       if (rule.type === 'count') {
         const conds = conditionsOf(rule);
         const byAttr = {};
@@ -113,7 +151,6 @@
           return true;
         });
       }
-      if (a.kind === 'label') return false;
       if (rule.type === 'sum') return a.kind === 'integer';
       return rule.type === 'apart' || rule.type === 'together';
     }
@@ -143,6 +180,12 @@
         case 'together': {
           const vals = (rule.values || []).filter((v) => keyOf(v) !== null);
           return `Keep together by ${an}${vals.length ? ` (${vals.join(', ')})` : ''}`;
+        }
+        case 'even': return rule.by === 'sum' ? `Balance the total of ${an} across groups` : `Spread ${an} evenly`;
+        case 'pin': return `${personName(setup, rule.personId)} in ${groupName(setup, rule.group)}`;
+        case 'pair': {
+          const names = (rule.people || []).map((id) => personName(setup, id));
+          return `${names.join(rule.mode === 'apart' ? ' not with ' : ' with ')}`;
         }
         default: return 'Unknown rule';
       }
@@ -176,13 +219,20 @@
     }
 
     // Normalize a setup into the solver model: per-group bounds, encoded people,
-    // keep-together blocks (a block is placed as one unit).
-    function normalizeRules(setup) {
+    // keep-together blocks (a block is placed as one unit). With
+    // opts.hardOnly the nice-to-have rules are left out (the "must" model).
+    function normalizeRules(setup, opts) {
+      const hardOnly = !!(opts && opts.hardOnly);
       const attrs = attrMap(setup);
       const G = groupCount(setup);
-      const people = (setup.people || []).filter((p) => p && String(p.name || '').trim() !== '');
+      const people = activePeople(setup);
       const n = people.length;
-      const rules = (setup.rules || []).filter((r) => usable(r, attrs, G));
+      const byId = {};
+      people.forEach((p, i) => { byId[p.id] = i + 1; });
+      const usableRules = (setup.rules || []).filter((r) => usable(r, attrs, G, byId));
+      const softIds = {};
+      usableRules.forEach((r) => { if (isSoft(r)) softIds[r.id] = true; });
+      const rules = hardOnly ? usableRules.filter((r) => !softIds[r.id]) : usableRules;
       const val = (p, attrId) => (p.values ? p.values[attrId] : null);
 
       const sizeRules = rules.filter((r) => r.type === 'size');
@@ -199,9 +249,32 @@
         size = scoped(sizeRules, G, 0, Infinity);
       }
 
+      // "Spread evenly" by value is a count rule per value present, with the
+      // bounds worked out from the people: floor/ceil of (how many) / groups.
+      const countRules = rules.filter((r) => r.type === 'count');
+      const sumRules = rules.filter((r) => r.type === 'sum');
+      rules.filter((r) => r.type === 'even').forEach((r) => {
+        if (r.by === 'sum') {
+          const total = people.reduce((s, p) => s + (bound(val(p, r.attrId)) || 0), 0);
+          sumRules.push({ id: r.id, type: 'sum', attrId: r.attrId, scope: 'all', min: Math.floor(total / G), max: Math.ceil(total / G) });
+          return;
+        }
+        const tally = {};
+        const order = [];
+        people.forEach((p) => {
+          const k = keyOf(val(p, r.attrId));
+          if (k === null) return;
+          if (!(k in tally)) { tally[k] = 0; order.push(k); }
+          tally[k]++;
+        });
+        order.forEach((k) => {
+          countRules.push({ id: r.id, type: 'count', attrId: r.attrId, value: k, scope: 'all', min: Math.floor(tally[k] / G), max: Math.ceil(tally[k] / G) });
+        });
+      });
+
       // Count constraints, one per distinct set of conditions (order-free).
       const countMap = {};
-      rules.filter((r) => r.type === 'count').forEach((r) => {
+      countRules.forEach((r) => {
         const conds = conditionsOf(r);
         const key = conds.map((c) => `${c.attrId}|${c.value}`).sort().join('&');
         (countMap[key] = countMap[key] || { conds, rules: [] }).rules.push(r);
@@ -210,14 +283,34 @@
         const c = countMap[key];
         return Object.assign({ key, conds: c.conds, label: condText(c.conds, attrs) }, scoped(c.rules, G, 0, Infinity));
       });
+      // A pin is a count of one particular person: at least 1 in the pinned group.
+      const pinMap = {};
+      rules.filter((r) => r.type === 'pin').forEach((r) => {
+        (pinMap[r.personId] = pinMap[r.personId] || []).push(r);
+      });
+      Object.keys(pinMap).forEach((personId) => {
+        const con = {
+          key: 'pin:' + personId, pin: true, person: personId, label: String(people[byId[personId] - 1].name).trim(),
+          min: new Array(G).fill(0), max: new Array(G).fill(Infinity),
+          minSrc: new Array(G).fill(null), maxSrc: new Array(G).fill(null),
+        };
+        pinMap[personId].forEach((r) => { con.min[r.group] = 1; con.minSrc[r.group] = r.id; });
+        counts.push(con);
+      });
       const matches = (p, conds) => conds.every((c) => keyOf(val(p, c.attrId)) === c.value);
+      const hit = (p, con) => (con.pin ? p.id === con.person : matches(p, con.conds));
 
       const sumMap = {};
-      rules.filter((r) => r.type === 'sum').forEach((r) => {
+      sumRules.forEach((r) => {
         (sumMap[r.attrId] = sumMap[r.attrId] || []).push(r);
       });
-      const sums = Object.keys(sumMap).map((attrId) =>
-        Object.assign({ attrId }, scoped(sumMap[attrId], G, -Infinity, Infinity)));
+      // Sum violations are measured in "typical person" units so that they are
+      // comparable with head-count violations when rules have to be traded off.
+      const sums = Object.keys(sumMap).map((attrId) => {
+        const mags = people.map((p) => Math.abs(bound(val(p, attrId)) || 0)).filter((x) => x > 0);
+        const unit = mags.length ? Math.max(1, mags.reduce((s, x) => s + x, 0) / mags.length) : 1;
+        return Object.assign({ attrId, unit }, scoped(sumMap[attrId], G, -Infinity, Infinity));
+      });
 
       const apartMap = {};
       rules.filter((r) => r.type === 'apart').forEach((r) => {
@@ -236,23 +329,35 @@
         a.V = a.values.length;
         return a;
       });
+      // "A not with B" is a keep-apart over just those people.
+      rules.filter((r) => r.type === 'pair' && r.mode === 'apart').forEach((r) => {
+        const ids = pairPeople(r, byId);
+        const members = {};
+        ids.forEach((id) => { members[id] = true; });
+        aparts.push({
+          attrId: null, pair: true, k: 1, src: r.id, members, index: {}, V: 1,
+          values: [ids.map((id) => String(people[byId[id] - 1].name).trim()).join(' and ')],
+        });
+      });
 
       // Per-person aggregates: [index, amount] pairs for each constraint family.
       const aggs = people.map((p) => {
         const agg = { size: 1, c: [], s: [], a: [] };
-        counts.forEach((c, ci) => { if (matches(p, c.conds)) agg.c.push([ci, 1]); });
+        counts.forEach((c, ci) => { if (hit(p, c)) agg.c.push([ci, 1]); });
         sums.forEach((s, si) => {
           const v = bound(val(p, s.attrId));
           if (v) agg.s.push([si, v]);
         });
         aparts.forEach((a, ai) => {
+          if (a.pair) { if (a.members[p.id]) agg.a.push([ai, 0, 1]); return; }
           const k = keyOf(val(p, a.attrId));
           if (k !== null) agg.a.push([ai, a.index[k], 1]);
         });
         return agg;
       });
 
-      // Keep-together: union-find over people sharing a (selected) value.
+      // Keep-together: union-find over people sharing a (selected) value, plus
+      // "A with B" person rules.
       const parent = range(n);
       const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
       rules.filter((r) => r.type === 'together').forEach((r) => {
@@ -264,6 +369,10 @@
           if (k in first) parent[find(i)] = find(first[k]);
           else first[k] = i;
         });
+      });
+      rules.filter((r) => r.type === 'pair' && r.mode === 'together').forEach((r) => {
+        const ids = pairPeople(r, byId);
+        ids.forEach((id) => { parent[find(byId[id] - 1)] = find(byId[ids[0]] - 1); });
       });
       const blockOf = {};
       const blocks = [];
@@ -281,7 +390,7 @@
         sums.map((s) => [s.min[g], s.max[g]]),
       ]));
 
-      return { setup, G, n, people, rules, balance, size, counts, sums, aparts, aggs, blocks, sig, matches };
+      return { setup, G, n, people, rules, balance, size, counts, sums, aparts, aggs, blocks, sig, matches, hit, softIds };
     }
 
     function mergeAggs(list) {
@@ -324,7 +433,7 @@
     function groupCost(m, st, g) {
       let c = over(st.size[g], m.size.min[g], m.size.max[g]);
       m.counts.forEach((con, ci) => { c += over(st.cnt[ci][g], con.min[g], con.max[g]); });
-      m.sums.forEach((con, si) => { c += over(st.sum[si][g], con.min[g], con.max[g]); });
+      m.sums.forEach((con, si) => { c += over(st.sum[si][g], con.min[g], con.max[g]) / con.unit; });
       m.aparts.forEach((a, ai) => {
         const arr = st.ap[ai];
         const base = g * a.V;
@@ -363,6 +472,10 @@
         push(g, sz < m.size.min[g] ? m.size.minSrc[g] : m.size.maxSrc[g], 'size', sz, m.size.min[g], m.size.max[g], 'size');
         m.counts.forEach((con, ci) => {
           const x = st.cnt[ci][g];
+          if (con.pin) {
+            if (x < con.min[g]) out.push({ group: g, ruleId: con.minSrc[g], amount: 1, kind: 'pin', message: `${groupName(setup, g)}: ${con.label} should be here` });
+            return;
+          }
           push(g, x < con.min[g] ? con.minSrc[g] : con.maxSrc[g], `count of ${con.label}`, x, con.min[g], con.max[g], 'count');
         });
         m.sums.forEach((con, si) => {
@@ -371,6 +484,11 @@
           push(g, x < con.min[g] ? con.minSrc[g] : con.maxSrc[g], `sum of ${a ? a.name : '?'}`, x, con.min[g], con.max[g], 'sum');
         });
         m.aparts.forEach((a, ai) => {
+          if (a.pair) {
+            const x = st.ap[ai][g];
+            if (x > 1) out.push({ group: g, ruleId: a.src, amount: x - 1, kind: 'pair', message: `${groupName(setup, g)}: ${x} of ${a.values[0]} are together but should be apart` });
+            return;
+          }
           const an = attrs[a.attrId] ? attrs[a.attrId].name : '?';
           for (let v = 0; v < a.V; v++) {
             const x = st.ap[ai][g * a.V + v];
@@ -383,7 +501,7 @@
           }
         });
       }
-      out.forEach((v) => { v.rule = ruleLabel(m, v.ruleId); });
+      out.forEach((v) => { v.rule = ruleLabel(m, v.ruleId); v.soft = !!m.softIds[v.ruleId]; });
       return out;
     }
 
@@ -410,7 +528,7 @@
         const gs = {};
         b.members.forEach((i) => { gs[where[m.people[i].id]] = true; });
         if (Object.keys(gs).length > 1) {
-          violations.push({ group: null, ruleId: null, amount: Object.keys(gs).length - 1, kind: 'together', rule: 'Keep together', message: `A keep-together set is split across ${Object.keys(gs).length} groups` });
+          violations.push({ group: null, ruleId: null, soft: false, amount: Object.keys(gs).length - 1, kind: 'together', rule: 'Keep together', message: `A keep-together set is split across ${Object.keys(gs).length} groups` });
         }
       });
       return violations;
@@ -646,19 +764,19 @@
 
     function solveModel(m, opts) {
       const o = opts || {};
-      if (m.n === 0) return { status: 'ok', groups: range(m.G).map(() => []), method: 'empty' };
+      if (m.n === 0) return { status: 'ok', personGroup: [], groups: range(m.G).map(() => []), method: 'empty' };
       const fast = fastPath(m, o.fastTries === undefined ? FAST_TRIES : o.fastTries);
-      if (fast) return { status: 'ok', groups: groupsFromAssign(m, fast), method: 'sampling' };
+      if (fast) return { status: 'ok', personGroup: fast, groups: groupsFromAssign(m, fast), method: 'sampling' };
       const res = backtrack(m, {
         nodeLimit: o.nodeLimit || NODE_LIMIT,
         timeMs: o.timeMs || TIME_MS,
       });
-      if (res.status === 'ok') return { status: 'ok', groups: groupsFromAssign(m, res.personGroup), method: 'search' };
+      if (res.status === 'ok') return { status: 'ok', personGroup: res.personGroup, groups: groupsFromAssign(m, res.personGroup), method: 'search' };
       if (res.status === 'timeout' && !o.noRepair) {
         // Big, loose setups can outgrow the search budget; a local-search repair
         // run often still finds a fully valid split.
         const be = bestEffortModel(m, { timeMs: o.timeMs || TIME_MS });
-        if (be.cost === 0) return { status: 'ok', groups: be.groups, method: 'repair' };
+        if (be.cost === 0) return { status: 'ok', personGroup: be.personGroup, groups: be.groups, method: 'repair' };
       }
       return { status: res.status };
     }
@@ -727,8 +845,8 @@
           const ch = groupCost(m, st, h);
           if (cg + ch <= before) {
             stale = cg + ch < before ? 0 : stale + 1;
-            cost += cg + ch - before;
             costs[g] = cg; costs[h] = ch;
+            cost = costs.reduce((s, x) => s + x, 0); // exact: sum costs are fractional
           } else {
             if (other >= 0) move(other, h);
             move(bi, g);
@@ -747,6 +865,7 @@
       m.blocks.forEach((b, bi) => b.members.forEach((i) => { personGroup[i] = best.where[bi]; }));
       return {
         cost: bestCost,
+        personGroup,
         groups: groupsFromAssign(m, personGroup),
         violations: violationList(m, best.st),
       };
@@ -756,10 +875,144 @@
       return bestEffortModel(normalizeRules(setup), opts);
     }
 
+    // ---- Nice-to-have polish: lexicographic local search -------------------
+
+    // How often each pair of people has already shared a group (earlier rounds
+    // or earlier draws). avoid = [ [ [personId…] per group ] per draw ].
+    function buildMet(m, avoid, force) {
+      const list = Array.isArray(avoid) ? avoid : [];
+      if (!list.length && !force) return null;
+      const met = new Uint8Array(m.n * m.n);
+      list.forEach((groups) => addMet(m, met, groups));
+      return met;
+    }
+
+    function addMet(m, met, groups) {
+      const index = {};
+      m.people.forEach((p, i) => { index[p.id] = i; });
+      (groups || []).forEach((ids) => {
+        const idx = (ids || []).map((id) => index[id]).filter((i) => i !== undefined);
+        for (let a = 0; a < idx.length; a++) {
+          for (let b = a + 1; b < idx.length; b++) {
+            const i = idx[a]; const j = idx[b];
+            if (met[i * m.n + j] < 255) { met[i * m.n + j]++; met[j * m.n + i]++; }
+          }
+        }
+      });
+    }
+
+    // Pairs in this split that have met before.
+    function countRepeats(m, met, personGroup) {
+      if (!met) return 0;
+      let r = 0;
+      for (let i = 0; i < m.n; i++) {
+        for (let j = i + 1; j < m.n; j++) {
+          if (personGroup[i] === personGroup[j] && met[i * m.n + j]) r++;
+        }
+      }
+      return r;
+    }
+
+    // Improve a split without ever making a higher tier worse:
+    // 1. must rules (mh), 2. nice-to-have rules (mf), 3. repeated pairings (met).
+    // Random moves/swaps of blocks, accepted when the tiers do not get worse.
+    function polish(mh, mf, personGroup, met, timeMs) {
+      const B = mh.blocks.length;
+      const G = mh.G;
+      const n = mh.n;
+      if (G < 2 || B < 2) return personGroup;
+      const dual = mf !== mh;
+      const stH = newStats(mh);
+      const stF = dual ? newStats(mf) : stH;
+      const where = new Array(B);
+      const pos = new Array(B);
+      const lists = range(G).map(() => []);
+      mh.blocks.forEach((b, bi) => {
+        const g = personGroup[b.members[0]];
+        where[bi] = g; pos[bi] = lists[g].length; lists[g].push(bi);
+        addAgg(mh, stH, b.agg, g, 1);
+        if (dual) addAgg(mf, stF, mf.blocks[bi].agg, g, 1);
+      });
+      const cH = range(G).map((g) => groupCost(mh, stH, g));
+      const cF = dual ? range(G).map((g) => groupCost(mf, stF, g)) : cH;
+      const total = (arr) => arr.reduce((s, x) => s + x, 0);
+      const rep = (bi, g) => {
+        if (!met) return 0;
+        let s = 0;
+        const mine = mh.blocks[bi].members;
+        const l = lists[g];
+        for (let x = 0; x < l.length; x++) {
+          if (l[x] === bi) continue;
+          const theirs = mh.blocks[l[x]].members;
+          for (let a = 0; a < mine.length; a++) {
+            const row = mine[a] * n;
+            for (let b = 0; b < theirs.length; b++) s += met[row + theirs[b]];
+          }
+        }
+        return s;
+      };
+      let totR = 0;
+      if (met) { for (let bi = 0; bi < B; bi++) totR += rep(bi, where[bi]); totR /= 2; }
+      const move = (bi, g) => {
+        const from = where[bi];
+        addAgg(mh, stH, mh.blocks[bi].agg, from, -1);
+        addAgg(mh, stH, mh.blocks[bi].agg, g, 1);
+        if (dual) {
+          addAgg(mf, stF, mf.blocks[bi].agg, from, -1);
+          addAgg(mf, stF, mf.blocks[bi].agg, g, 1);
+        }
+        const l = lists[from];
+        const last = l.pop();
+        if (last !== bi) { l[pos[bi]] = last; pos[last] = pos[bi]; }
+        where[bi] = g; pos[bi] = lists[g].length; lists[g].push(bi);
+      };
+
+      const deadline = now() + timeMs;
+      const staleLimit = Math.max(2000, 30 * B);
+      let stale = 0;
+      let iter = 0;
+      while ((total(cF) > EPS || totR > 0) && stale < staleLimit) {
+        if ((++iter & 63) === 0 && now() > deadline) break;
+        const bi = randomIndex(B);
+        const g = where[bi];
+        let h = randomIndex(G - 1);
+        if (h >= g) h++;
+        const other = lists[h].length && randomIndex(2) ? lists[h][randomIndex(lists[h].length)] : -1;
+        const hB = cH[g] + cH[h];
+        const fB = cF[g] + cF[h];
+        const rB = met ? rep(bi, g) + (other >= 0 ? rep(other, h) : 0) : 0;
+        move(bi, h);
+        if (other >= 0) move(other, g);
+        const hg = groupCost(mh, stH, g);
+        const hh = groupCost(mh, stH, h);
+        const fg = dual ? groupCost(mf, stF, g) : hg;
+        const fh = dual ? groupCost(mf, stF, h) : hh;
+        const rA = met ? rep(bi, h) + (other >= 0 ? rep(other, g) : 0) : 0;
+        const hA = hg + hh;
+        const fA = fg + fh;
+        let cmp;
+        if (hA < hB - EPS) cmp = -1; else if (hA > hB + EPS) cmp = 1;
+        else if (fA < fB - EPS) cmp = -1; else if (fA > fB + EPS) cmp = 1;
+        else cmp = rA < rB ? -1 : (rA > rB ? 1 : 0);
+        if (cmp <= 0) {
+          stale = cmp < 0 ? 0 : stale + 1;
+          cH[g] = hg; cH[h] = hh;
+          if (dual) { cF[g] = fg; cF[h] = fh; }
+          totR += rA - rB;
+        } else {
+          if (other >= 0) move(other, h);
+          move(bi, g);
+          stale++;
+        }
+      }
+      const out = new Array(n);
+      mh.blocks.forEach((b, bi) => b.members.forEach((i) => { out[i] = where[bi]; }));
+      return out;
+    }
+
     // ---- Live hints: cheap necessary conditions ---------------------------
 
-    function validateHints(setup) {
-      const m = normalizeRules(setup);
+    function hintsFor(m, setup) {
       const attrs = attrMap(setup);
       const out = [];
       const err = (message, ruleIds) => out.push({ level: 'error', message, ruleIds: (ruleIds || []).filter(Boolean) });
@@ -780,8 +1033,12 @@
       if (sMax < m.n) err(`Group-size maximums only fit ${sMax} people, but there are ${m.n}.`, ids(m.size));
 
       m.counts.forEach((con) => {
+        if (con.pin) {
+          if (sum(con.min) > 1) err(`${con.label} is pinned to more than one group.`, ids(con));
+          return;
+        }
         const label = `“${con.label}”`;
-        const have = m.people.filter((p) => m.matches(p, con.conds)).length;
+        const have = m.people.filter((p) => m.hit(p, con)).length;
         const need = sum(con.min);
         const room = sum(con.max);
         const uniformMin = con.min.every((x) => x === con.min[0]);
@@ -811,6 +1068,11 @@
       });
 
       m.aparts.forEach((a) => {
+        if (a.pair) {
+          const count = Object.keys(a.members).length;
+          if (count > G) err(`${a.values[0]} should all be apart, but there are only ${G} groups.`, [a.src]);
+          return;
+        }
         const an = attrs[a.attrId].name;
         const tally = new Array(a.V).fill(0);
         m.people.forEach((p) => {
@@ -824,7 +1086,7 @@
       });
 
       const biggest = Math.max.apply(null, m.size.max);
-      const togetherIds = m.rules.filter((r) => r.type === 'together').map((r) => r.id);
+      const togetherIds = m.rules.filter((r) => r.type === 'together' || (r.type === 'pair' && r.mode === 'together')).map((r) => r.id);
       let flagged = false;
       m.blocks.forEach((b) => {
         if (flagged || b.members.length < 2) return;
@@ -836,7 +1098,9 @@
         b.agg.a.forEach(([ai, v, x]) => {
           const a = m.aparts[ai];
           if (!flagged && x > a.k) {
-            err(`Keep together puts ${x} people with ${attrs[a.attrId].name} = ${a.values[v]} in one group, but keep apart allows ${a.k}.`, togetherIds.concat([a.src]));
+            err(a.pair
+              ? `${a.values[0]} are asked to be both together and apart.`
+              : `Keep together puts ${x} people with ${attrs[a.attrId].name} = ${a.values[v]} in one group, but keep apart allows ${a.k}.`, togetherIds.concat([a.src]));
             flagged = true;
           }
         });
@@ -844,53 +1108,117 @@
       return out;
     }
 
+    // Problems with must rules are errors (they block a strict draw); the same
+    // problems caused only by nice-to-have rules are warnings.
+    function validateHints(setup) {
+      const mh = normalizeRules(setup, { hardOnly: true });
+      const hard = hintsFor(mh, setup);
+      if (!Object.keys(mh.softIds).length) return hard;
+      const seen = {};
+      hard.forEach((h) => { seen[h.message] = true; });
+      hintsFor(normalizeRules(setup), setup).forEach((h) => {
+        if (seen[h.message]) return;
+        hard.push({
+          level: 'warning', soft: true, ruleIds: h.ruleIds,
+          message: h.level === 'error' ? `${h.message} Nice-to-have rules are met as closely as possible.` : h.message,
+        });
+      });
+      return hard;
+    }
+
     // ---- Explaining infeasibility -----------------------------------------
 
     function blame(setup) {
-      const rules = (setup.rules || []).slice(0, BLAME_RULES);
+      const soft = normalizeRules(setup, { hardOnly: true }).softIds;
+      const rules = (setup.rules || []).filter((r) => !soft[r.id]).slice(0, BLAME_RULES);
       const out = [];
       const tryWithout = (variant, label, ruleId) => {
-        if (validateHints(variant).some((h) => h.level === 'error')) return;
-        const res = solveModel(normalizeRules(variant), { timeMs: BLAME_MS, nodeLimit: 20000, fastTries: 50, noRepair: true });
+        const mv = normalizeRules(variant, { hardOnly: true });
+        if (hintsFor(mv, variant).some((h) => h.level === 'error')) return;
+        const res = solveModel(mv, { timeMs: BLAME_MS, nodeLimit: 20000, fastTries: 50, noRepair: true });
         if (res.status === 'ok') out.push({ ruleId, rule: label, message: `Dropping “${label}” makes this feasible.` });
       };
       rules.forEach((r) => {
         tryWithout(Object.assign({}, setup, { rules: setup.rules.filter((x) => x !== r) }), describeRule(r, setup), r.id);
       });
-      const m = normalizeRules(setup);
+      const m = normalizeRules(setup, { hardOnly: true });
       if (m.balance) {
         tryWithout(Object.assign({}, setup, { options: Object.assign({}, setup.options, { balance: false }) }), 'Balanced group sizes', 'balance');
       }
       return out;
     }
 
-    // Full pipeline used by the UI (and its Worker): strict solve, then best
-    // effort or an explanation.
-    function run(setup, opts) {
-      const m = normalizeRules(setup);
-      if (m.n === 0) return { status: 'empty', message: 'Add at least one person to draw groups.' };
-      const errors = validateHints(setup).filter((h) => h.level === 'error');
-      const wantBest = !!(setup.options && setup.options.bestEffort);
-      let res = null;
+    // One split: must rules strictly (or best effort), then nice-to-have rules
+    // and repeat pairings polished without breaking a must rule.
+    function drawOnce(mh, mf, met, errors, wantBest, o) {
+      let pg = null;
+      let method = '';
+      let failed = 'infeasible';
       if (!errors.length) {
-        res = solveModel(m, opts);
-        if (res.status === 'ok') return { status: 'ok', groups: res.groups, violations: [], method: res.method };
+        if (mf !== mh) {
+          const all = solveModel(mf, { timeMs: FULL_MS, nodeLimit: 10000, fastTries: o.fastTries, noRepair: true });
+          if (all.status === 'ok') { pg = all.personGroup; method = all.method; }
+        }
+        if (!pg) {
+          const res = solveModel(mh, o);
+          if (res.status === 'ok') { pg = res.personGroup; method = res.method; } else failed = res.status;
+        }
       }
-      if (wantBest) {
-        const be = bestEffortModel(m, opts);
-        return {
-          status: be.cost === 0 ? 'ok' : 'best-effort',
-          groups: be.groups, violations: be.violations, method: 'best-effort',
-        };
+      if (!pg) {
+        if (!wantBest) return { status: failed };
+        pg = bestEffortModel(mh, o).personGroup;
+        method = 'best-effort';
       }
-      if (errors.length || res.status === 'infeasible') {
-        return { status: 'infeasible', reasons: errors.map((e) => e.message), blame: blame(setup) };
+      if (mf !== mh || met) pg = polish(mh, mf, pg, met, o.polishMs || POLISH_MS);
+      const st = newStats(mf);
+      pg.forEach((g, i) => addAgg(mf, st, mf.aggs[i], g, 1));
+      const all = violationList(mf, st);
+      const violations = all.filter((v) => !v.soft);
+      return {
+        status: violations.length ? 'best-effort' : 'ok',
+        groups: groupsFromAssign(mf, pg), personGroup: pg,
+        violations, notes: all.filter((v) => v.soft),
+        repeats: countRepeats(mf, met, pg), method,
+      };
+    }
+
+    // Full pipeline used by the UI (and its Worker). opts.rounds draws several
+    // splits in a row, each avoiding the pairings of the ones before;
+    // opts.avoid lists earlier splits whose pairings should not repeat.
+    function run(setup, opts) {
+      const o = opts || {};
+      const mh = normalizeRules(setup, { hardOnly: true });
+      if (mh.n === 0) return { status: 'empty', message: 'Add at least one person to draw groups.' };
+      const mf = Object.keys(mh.softIds).length ? normalizeRules(setup) : mh;
+      const errors = hintsFor(mh, setup).filter((h) => h.level === 'error');
+      const wantBest = !!(setup.options && setup.options.bestEffort);
+      const want = Math.min(MAX_ROUNDS, Math.max(1, parseInt(o.rounds, 10) || 1));
+      const met = buildMet(mh, o.avoid, want > 1);
+      const rounds = [];
+      for (let r = 0; r < want; r++) {
+        const res = drawOnce(mh, mf, met, errors, wantBest, o);
+        if (res.status !== 'ok' && res.status !== 'best-effort') {
+          if (r > 0) break; // later rounds ran out of time: return the ones drawn
+          if (errors.length || res.status === 'infeasible') {
+            return { status: 'infeasible', reasons: errors.map((e) => e.message), blame: blame(setup) };
+          }
+          return { status: 'timeout', reasons: [], blame: [] };
+        }
+        if (met) addMet(mh, met, res.groups);
+        delete res.personGroup;
+        rounds.push(res);
       }
-      return { status: 'timeout', reasons: [], blame: [] };
+      const first = rounds[0];
+      if (want === 1) return first;
+      return {
+        status: rounds.some((x) => x.status === 'best-effort') ? 'best-effort' : 'ok',
+        groups: first.groups, violations: first.violations, notes: first.notes, repeats: first.repeats, method: first.method,
+        rounds,
+      };
     }
 
     return {
-      normalizeRules, validateHints, scopeHas, solve, bestEffort, evaluate, run, blame, describeRule,
+      normalizeRules, validateHints, scopeHas, solve, bestEffort, evaluate, run, blame, describeRule, isSoft,
     };
   }
 

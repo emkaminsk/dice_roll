@@ -1,6 +1,6 @@
 # Spec — Group Draw (constrained assignment of people to groups)
 
-Status: implemented (v1 + follow-ups, see §11) · Owner: Marcin · Related: `CLAUDE.md`, `ROADMAP.md`,
+Status: implemented (v1 + follow-ups + v2 feature set of §12, see §11) · Owner: Marcin · Related: `CLAUDE.md`, `ROADMAP.md`,
 existing `team_splitter.js` (the simple, unconstrained cousin of this feature).
 
 ## 1. Summary
@@ -61,7 +61,7 @@ User adds any number of attributes. Each has:
 
 Kinds:
 
-- **label** — free text, display-only. Usable in **count rules only** (exact-text match, empty ignored; the rule's value is picked from the values present in the data). Not usable in sum, keep-apart or keep-together rules. Not required to be unique.
+- **label** — free text. Usable in count, keep-apart, keep-together and spread-evenly rules (exact-text match, empty ignored; a count rule's value is picked from the values present in the data). Not usable in sum rules. Not required to be unique.
 - **integer** — whole number (negative allowed). Usable in count rules (treated as
   a category by value), spread rules, and optional sum rules (§4.3).
 - **category** — value must be one of the options. Usable in count and spread rules.
@@ -88,6 +88,12 @@ defined attribute. Entry methods (all three):
    empty". Invalid integers listed per row; nothing is imported until the user
    confirms.
 3. **Import JSON** (see §7).
+
+**Attendance.** Every row has a **Here** checkbox (first column, ticked by default). Unticking it
+marks the person *away* (`absent: true`): they stay in the list — and in export/autosave — but are
+left out of the draw, the live hints, the counts ("28 people · 2 away") and the category summary.
+Rules that name an away person (pin / pair) are skipped for that draw. **Everyone's here** (visible
+while someone is away) ticks everybody again. If everyone is away, Draw explains instead of drawing.
 
 A **Clear all** button (visible when people exist) removes every person. Shows a live count ("42 people") and a per-category summary line.
 Soft limit: 500 people; hard limit 2000 (message beyond that). Limits keep the
@@ -138,6 +144,27 @@ Rule types:
    restricted to chosen values. Two different keep-together rules combine
    transitively (union of the sets).
 
+6. **Spread evenly** (`even`) — pick an attribute and every group gets its fair share of **each
+   value**: the bounds are derived at draw time as floor/ceil of (people with that value ÷ groups),
+   so they stay right when people are added, removed or marked away. For integer attributes the
+   alternative **"the total (sum)"** balances the group totals instead (target band floor/ceil of
+   total ÷ groups); that variant is an objective, so it is *always* nice-to-have.
+7. **Pin** (`pin`) — one person always lands in one chosen group. One pin per person.
+8. **Pair** (`pair`) — two people **together with** each other (same group, joins the keep-together
+   blocks) or **apart from** each other (never the same group).
+
+Person rules (7, 8) are removed with a notice when a person they name is deleted; pins also go when
+their group is removed by lowering the group count.
+
+**Priority: must / nice to have.** Count, sum, keep-apart, spread-evenly (by value), pin and
+pair-apart rules carry a priority (`rule.soft`). *Must* (default) behaves as before. *Nice to have*
+never blocks a draw: must rules are satisfied first, then nice-to-have rules are met as closely as
+possible; what is left unmet is listed in a calm "Nice to have" note under the status line (not the
+warning panel). Group-size, keep-together and pair-together rules are always must. The priority is
+chosen in the add-rule form and toggled per rule in the list (dashed border = nice to have). The
+global "Allow best effort" toggle is unchanged and still governs what happens when the *must* rules
+cannot all be met.
+
 Other settings:
 
 - **Balance** (checkbox, default on): when no group-size rule exists, group sizes
@@ -155,6 +182,9 @@ on every edit and show inline messages, e.g.:
 - `min > max`; keep-apart `k` too small (value with 8 people, 5 groups, k=1);
 - keep-together set larger than the max group size;
 - rule on a value with no people (warning only).
+- a person pinned to more than one group; a pair asked to be both together and apart; more people
+  to keep mutually apart than there are groups.
+Problems caused only by nice-to-have rules are shown as warnings, never errors.
 These are *hints*; the solver is the source of truth (§5). Infeasibility not
 caught by the hints is reported after Draw with the most likely culprit rule(s)
 (§5.4).
@@ -176,6 +206,26 @@ caught by the hints is reported after Draw with the most likely culprit rule(s)
 - Result actions: **Copy as text** (one line per group: `Name (n): A, B, C` — comma-separated names), **Download
   CSV** (`group,name,<attrs…>`), and a small **history** of the last 10 draws in
   this session (read-only, click to re-display). History is in memory only.
+- **Rounds** (number input, 1–10, next to Draw): draws several splits in one go. Every round is a
+  full valid split; each later round is optimised so that as few pairs as possible share a group
+  again. The result shows a round bar ("Round 1 · Round 2 · …") that switches the cards, plus a
+  line saying how many pairs in the shown round had already met. A multi-round draw is one history
+  entry; Copy/CSV contain every round (`Round n` headings / a leading `round` column). Disabled
+  while Partial redraw is on.
+- **Avoid repeat pairings** (checkbox): the same optimisation against every split in this
+  session's history, for a single draw ("mix it up compared with last time").
+- **Manual adjust**: while the shown result matches the current setup, tap a name and then another
+  name to **swap** them, or tap **Move here** on another group to **move** them (keyboard: focus a
+  name, Enter/Space; Escape cancels). The edited split is re-checked against every rule
+  (`Solver.evaluate`): broken must rules appear in the warning panel ("After your changes: …"),
+  unmet nice-to-have rules in the note. An edit of a single draw is a new history entry tagged
+  *edited* (so the untouched draw is the undo); an edit of a round replaces that round in place.
+- **Present** (button in the result actions): a full-screen presenter overlay for the shown round.
+  All names start hidden; each click on **Reveal next** (or Space / Enter / →) reveals the next
+  name — or the next whole group in "Group by group" mode — with a big spotlight line, per-group
+  progress, **Reveal all**, optional browser full screen, a confetti finale, Escape to close and
+  focus returned to the button. Purely presentational: nothing random happens there. Reduced motion
+  → same flow without animation or confetti.
 - Best-effort result shows a prominent warning panel listing violated rules and by
   how much; strict-mode failure shows an error panel instead of cards (previous
   result stays visible but is dimmed/marked as outdated).
@@ -227,9 +277,28 @@ caught by the hints is reported after Draw with the most likely culprit rule(s)
    cheapest of the runs (ties broken randomly). Cost 0 ⇒ it is a normal valid
    result.
 
+6. **Nice-to-have rules.** Two models are built from one setup: the *must* model (nice-to-have
+   rules left out) and the *full* model (all rules). A draw first tries the full model briefly
+   (300 ms: fast path + bounded search); success means every rule is met. Otherwise it solves the
+   must model exactly as in steps 2–5 and then runs **polish**: random block moves/swaps accepted
+   only if the tiers *(must-rule cost, nice-to-have cost, repeated pairings)* do not get
+   lexicographically worse (≤ 400 ms, stops early when stale). A must rule is therefore never
+   traded for a nice-to-have one.
+7. **Repeat pairings.** A pair-count matrix is built from the splits to avoid (earlier rounds, or
+   the session history) and is the last tier of the same polish. For `rounds = R` the pipeline runs
+   R times, adding each round's pairs to the matrix.
+8. **Derived rules.** Spread evenly (by value) expands to one count constraint per value present;
+   spread evenly (by sum) to a nice-to-have sum band; a pin to a count constraint on one person
+   (min 1 in the pinned group); pair-apart to a keep-apart set of those people; pair-together to a
+   union in the keep-together blocks. So fast path, pruning, best effort, hints and blame cover
+   them without special cases.
+9. **Comparable costs.** Sum violations are divided by the average absolute value of that
+   attribute ("one typical person"), so a sum that is a few points off no longer outweighs a
+   head-count rule when rules must be traded off. Reported violation amounts stay in raw units.
+
 ### 5.3 Fairness statement (to show in a tooltip / README)
 
-"Every draw uses cryptographically secure randomness. With no rules, or only rules a random shuffle can satisfy, every split is equally likely. When rules need searching (keep together, tight limits), splits are random but not uniform among all valid ones; the repair and best-effort fallbacks are not uniform either." — we are honest about this limitation.
+"Every draw uses cryptographically secure randomness. With no rules, or only rules a random shuffle can satisfy, every split is equally likely. When rules need searching (keep together, tight limits), splits are random but not uniform among all valid ones; the repair and best-effort fallbacks, nice-to-have rules, balancing a total and avoiding repeat pairings are random searches too, so not uniform either." — we are honest about this limitation. The polish step only runs when there is something to optimise (an unmet nice-to-have rule or pairings to avoid), so plain draws keep their exact uniformity. Manual adjustment and the presenter involve no randomness at all.
 `fairness-auditor` must review that no `Math.random()` is used for outcomes and
 that candidate/group ordering uses the fair RNG.
 
@@ -262,10 +331,13 @@ State shape (in-memory single object):
 ```js
 {
   attributes: [{ id, name, kind: 'label'|'integer'|'category', options?: string[] }],
-  people:     [{ id, name, values: { [attrId]: string|number|null } }],
+  people:     [{ id, name, absent?: true, values: { [attrId]: string|number|null } }],
   groups:     { count, names: string[], label?: string /* group name word */ },
-  rules:      [{ id, type: 'size'|'count'|'sum'|'apart'|'together',
-                 scope: 'all'|groupIndex|groupIndex[], attrId?, value?, and?: [{attrId, value}] /* count */, min?, max?, k? }],
+  rules:      [{ id, type: 'size'|'count'|'sum'|'apart'|'together'|'even'|'pin'|'pair',
+                 scope: 'all'|groupIndex|groupIndex[], attrId?, value?, and?: [{attrId, value}] /* count */, min?, max?, k?,
+                 by?: 'value'|'sum' /* even */, personId?, group? /* pin */,
+                 mode?: 'together'|'apart', people?: [personId, personId] /* pair */,
+                 soft?: true /* nice to have */ }],
   options:    { balance: true, bestEffort: false },
   results:    [/* history */]
 }
@@ -324,25 +396,44 @@ fixture already fails on console errors). Pure-solver tests via
 15. `prefers-reduced-motion`: results appear immediately; no console errors.
 16. Independence: running Group Draw does not change any other tool's inputs/results.
 
+17. Attendance: away people are skipped by draw/hints/counts, survive export + autosave, and
+    "Everyone's here" restores them; everyone away → guidance.
+18. Spread evenly: per-value counts stay within floor/ceil of the share over many draws; the sum
+    variant never blocks and narrows the gap between group totals versus plain draws.
+19. Label keep apart / keep together hold over many draws; impossible label setups are hinted.
+20. Pin / pair rules hold over many draws, combine with attribute rules and partial redraw,
+    conflicts are hinted and blamed, and they are pruned with their people / groups.
+21. Nice to have: an impossible must rule fails, the same rule as nice-to-have draws with notes and
+    is met as closely as possible; a must rule is never sacrificed for it.
+22. Rounds: every round is a full valid split; 16 people in 4×4 for 3 rounds has zero repeats;
+    UI round bar, copy and CSV cover all rounds.
+23. Manual adjust: swap, move (flags broken rules), keyboard pick/cancel, history as undo, switched
+    off when the setup changed.
+24. Presenter: step reveal by name and by group, reveal all, Escape, focus return, 375 px.
+
 Docs to update when shipping: `README.md` (project structure), `ROADMAP.md`
 (new entry, checked), `tests/test_app.py`, and skill `add-tool` notes if the tab
 mechanism changes the recipe.
 
 ## 9. Out of scope for v1 (parking lot)
 
-- Locking/pinning a person to a group, or "must/must-not be with person X".
-- Weighted objectives (soft rule priorities), average-based rules.
+- Numeric weights per rule (only two priorities exist: must / nice to have), average-based rules.
 - Multiple saved setups, shareable URLs with embedded data.
-- Drag-and-drop manual adjustment of the result.
-- **True keep apart / keep together on label attributes** (next phase; e.g. no two people with the same surname in a group). Label attributes already support count rules (§4.3).
+- Drag-and-drop (manual adjustment is tap-to-swap / move, which also works on phones).
+- Pair rules with more than two people in the form (the data model and solver already accept a list).
+- Persisting results or the pairing history across reloads (history is memory-only by design).
+- Seeded / reproducible draws (would bypass the crypto-RNG-only rule).
 - Per-attribute columns reorder, sorting/filtering in the table (nice later).
+
+Shipped since v1 and no longer parked: pinning, pair rules, rule priorities, manual adjustment,
+keep apart/together on labels (see §12).
 
 ## 10. Decisions
 
 Confirmed by the product owner:
 
 1. `name` is a fixed built-in field, not a custom attribute.
-2. Label attributes are usable in count rules only; keep apart/together on labels is parked for the next phase (see §9).
+2. Label attributes are usable in every rule type except sum (keep apart/together on labels shipped in v2).
 3. Sum rules exist for integer attributes only; no average rules (not wanted).
 4. Keep-apart/together scopes are global (not per-group).
 
@@ -401,6 +492,33 @@ IDs are all `gd-*` in `appFE/index.html` (view root `#group-draw-view`, ~l.233; 
 | 60b446d | Themed `<select>` (dark-mode white-on-white fix) | CSS `.gd-view select` |
 | 8eb9283 | People "Clear all" | `#gd-people-clear` |
 
+| v2 (§12) | Attendance, spread evenly, label apart/together, pin + pair, must / nice to have, rounds + avoid repeats, manual adjust, presenter | see §12 |
+
 ### 11.5 Test lookup (`tests/test_app.py`)
 
-Tabs `test_gd_tabs_*` · attributes/people/paste `test_gd_attributes_*`, `*_people_*`, `*_paste_*` · rules/scope `test_gd_rules_*`, `*_scope_*`, `*_multi_group_*` · label rules `test_gd_label_count_rule_*` · compound `test_gd_compound_*` · partial `test_gd_partial_*` · group word `test_gd_group_word_*` · draw/fairness `test_gd_strict_*`, `*_uniformity_*`, `*_performance_*` · IO `*_export_*`, `*_import_*`, `*_autosaved_*`, `*_csv_*` · theme `test_theme_*` · clear all `test_gd_people_clear_all`.
+Tabs `test_gd_tabs_*` · attributes/people/paste `test_gd_attributes_*`, `*_people_*`, `*_paste_*` · rules/scope `test_gd_rules_*`, `*_scope_*`, `*_multi_group_*` · label rules `test_gd_label_count_rule_*` · compound `test_gd_compound_*` · partial `test_gd_partial_*` · group word `test_gd_group_word_*` · draw/fairness `test_gd_strict_*`, `*_uniformity_*`, `*_performance_*` · IO `*_export_*`, `*_import_*`, `*_autosaved_*`, `*_csv_*` · theme `test_theme_*` · clear all `test_gd_people_clear_all`. · v2: `test_gd_absent_*`, `*_everyone_absent_*`, `*_spread_evenly_*`, `*_label_keep_apart_and_together`, `*_person_rule*`, `*_nice_to_have_*`, `*_best_effort_weighs_*`, `*_rounds_*`, `*_manual_adjust_*`, `*_presenter_*`, `*_new_rules_survive_*`.
+
+## 12. v2 feature set (branch `feature/group-draw-next`)
+
+Eight features that came out of a critical review of v1. Behaviour is specified in the sections
+referenced; this table says where each lives.
+
+| # | Feature | Spec | UI (`group_draw.js`, IDs in `index.html`) | Solver (`group_draw_solver.js`) |
+|---|---|---|---|---|
+| 1 | Attendance ("Here" checkbox) | §4.2 | `activePeople`, `personRow` (`.gd-here`), `onCellEdit` (`present` field), `#gd-people-present` | `activePeople` filter in `normalizeRules` |
+| 2 | Spread evenly (`even`, by value / by sum) | §4.3-6 | `#gd-rule-by`, `syncSoftField`, `ruleTarget` | derived count / sum rules in `normalizeRules` |
+| 3 | Keep apart / together on labels | §4.1 | `ruleAttrs`, `cleanRule` | `usable` |
+| 4 | Pin + pair rules | §4.3-7/8 | `#gd-rule-person`, `#gd-rule-person2`, `#gd-rule-group`, `#gd-rule-mode`, `renderPersonOptions`, `prunePersonRules`, pin remap in `partialPlan` | pins as count constraints (`con.pin`), pair-apart as `aparts` entries (`a.pair`), pair-together in the union-find |
+| 5 | Manual adjust | §4.4 | `canAdjust`, `renderPick`, `onMemberPick`, `onMoveHere`, `applyAdjust`, `checked`, `#gd-adjust-hint`, `.gd-move-here` | `evaluate` (violations carry `soft`) |
+| 6 | Rounds + avoid repeat pairings | §4.4, §5.2-7 | `#gd-rounds`, `#gd-fresh`, `roundsWanted`, `avoidList`, `renderRoundsNav`, series entries (`entry.series` / `entry.round`), `resultText` / `resultCsv` | `run(setup, { rounds, avoid })`, `buildMet`, `addMet`, `countRepeats`, `polish` |
+| 7 | Presenter mode | §4.4 | `openPresenter`, `closePresenter`, `presenterUnits`, `confetti`, `#gd-present`, `.gd-present*` CSS | — |
+| 8 | Must / nice to have | §4.3, §5.2-6/9 | `canBeSoft`, `withSoft`, `#gd-rule-soft`, `.gd-rule-soft` toggle, `renderNotes` (`#gd-notes`) | `isSoft`, `normalizeRules(setup, { hardOnly })`, `drawOnce`, `polish`, `hintsFor` + `validateHints` (soft problems → warnings), `con.unit` for sums |
+
+Result shape of `Solver.run`: `{ status, groups, violations, notes, repeats, method }` — `violations`
+are broken must rules, `notes` unmet nice-to-have rules — plus `rounds: [same shape…]` when more
+than one round was asked for. Failures are unchanged (`infeasible` / `timeout` / `empty`).
+
+Deliberate deviations from the review's proposal: the global "Allow best effort" toggle was kept
+(it composes with per-rule priorities instead of being replaced by them), and the pair form takes
+exactly two people.
+

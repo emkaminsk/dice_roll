@@ -45,6 +45,9 @@ Order within a tier is the suggested build order. Check items off as they ship.
 - [x] **Group Draw** — a separate view (tab) for drawing people with custom attributes
   into groups under per-group rules (size, count, sum, keep apart/together), strict or
   best effort. Spec: [`.ai/spec-group-draw.md`](.ai/spec-group-draw.md).
+- [x] **Group Draw v2** — attendance toggle, "spread evenly" rule, keep apart/together on labels,
+  pin + pair person rules, must / nice-to-have priorities, multi-round draws that avoid repeat
+  pairings, tap-to-swap manual adjustment, presenter mode. Spec §12.
 
 ## Tier 3 — fortune telling (content-heavy, high engagement)
 
