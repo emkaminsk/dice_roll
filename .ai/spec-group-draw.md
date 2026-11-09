@@ -1,6 +1,6 @@
 # Spec — Group Draw (constrained assignment of people to groups)
 
-Status: draft for implementation · Owner: Marcin · Related: `CLAUDE.md`, `ROADMAP.md`,
+Status: implemented (v1 + follow-ups, see §11) · Owner: Marcin · Related: `CLAUDE.md`, `ROADMAP.md`,
 existing `team_splitter.js` (the simple, unconstrained cousin of this feature).
 
 ## 1. Summary
@@ -89,14 +89,15 @@ defined attribute. Entry methods (all three):
    confirms.
 3. **Import JSON** (see §7).
 
-Shows a live count ("42 people") and a per-category summary line.
+A **Clear all** button (visible when people exist) removes every person. Shows a live count ("42 people") and a per-category summary line.
 Soft limit: 500 people; hard limit 2000 (message beyond that). Limits keep the
 solver responsive.
 
 ### 4.3 Step 3 — Define drawing criteria
 
 **Groups.** Number of groups `G` (2–50). Group names default to "Group 1…G", each
-renameable. The draw always assigns **every person to exactly one group**.
+renameable; the **group name word** (`groups.label`, e.g. "Pokój" → "Pokój 1, Pokój 2…")
+replaces "Group" in results, copy/CSV and rule text. The draw always assigns **every person to exactly one group**.
 
 **Rules** are *per group* (decision from the product owner). UI model: a rules
 table with a **scope** column — `All groups` (default; applies to every group
@@ -172,7 +173,7 @@ caught by the hints is reported after Draw with the most likely culprit rule(s)
   stagger animation, names pop in; a brief shuffle/"dealing" animation on the
   button press. All of it cosmetic and after the result is already computed.
   `prefers-reduced-motion` → instant render.
-- Result actions: **Copy as text** (plain text, one block per group), **Download
+- Result actions: **Copy as text** (one line per group: `Name (n): A, B, C` — comma-separated names), **Download
   CSV** (`group,name,<attrs…>`), and a small **history** of the last 10 draws in
   this session (read-only, click to re-display). History is in memory only.
 - Best-effort result shows a prominent warning panel listing violated rules and by
@@ -262,7 +263,7 @@ State shape (in-memory single object):
 {
   attributes: [{ id, name, kind: 'label'|'integer'|'category', options?: string[] }],
   people:     [{ id, name, values: { [attrId]: string|number|null } }],
-  groups:     { count, names: string[] },
+  groups:     { count, names: string[], label?: string /* group name word */ },
   rules:      [{ id, type: 'size'|'count'|'sum'|'apart'|'together',
                  scope: 'all'|groupIndex|groupIndex[], attrId?, value?, and?: [{attrId, value}] /* count */, min?, max?, k? }],
   options:    { balance: true, bestEffort: false },
@@ -348,3 +349,58 @@ Confirmed by the product owner:
 Defaults adopted (not objected to): "Balance" on by default and disabled by
 group-size rules; best effort weighs all violations equally; tab switching via
 URL hash; delivery flow game-builder → test-engineer → fairness-auditor → ux-polisher.
+
+## 11. Implementation map (where things live)
+
+Orientation for future work. Line numbers drift — grep the function/ID names. UI element
+IDs are all `gd-*` in `appFE/index.html` (view root `#group-draw-view`, ~l.233; cached in the
+`els` object at the top of `group_draw.js`).
+
+### 11.1 Files
+
+| File | Role |
+|---|---|
+| `appFE/view_tabs.js` | Quick tools / Group Draw tab switcher (`role=tablist`, arrows, `#group-draw` hash). |
+| `appFE/group_draw.js` (IIFE, ~1750 l.) | All UI + state (`state`, `version`, `history`, `shown`, `kept`). |
+| `appFE/group_draw_solver.js` | Pure solver `createSolver(randomIndex)` → `window.GroupDrawSolver`. |
+| `appFE/data/group_draw_example.js` | `GROUP_DRAW_EXAMPLE` for "Load example". |
+| `appFE/theme.js` | Light/dark toggle (`data-theme` on `<html>`, `localStorage` key `theme`); not Group Draw-specific but all `.gd-*` CSS uses its tokens. |
+| `appFE/style.css` | "Group Draw" section from ~l.1108 (`.gd-*`); dark-mode select fix ~l.1668; compound-condition styles ~l.1793–1833. |
+| `tests/test_app.py` | `test_gd_*` (l.~727–1900) + `test_theme_*`; see §11.5. |
+
+### 11.2 `group_draw.js` by area (grep the function name)
+
+- **Helpers / setup**: `emptySetup`, `groupWord`/`groupLabel` (group name word), `setupForExport`, `scheduleSave`/`loadSaved` (autosave `groupDraw.setup.v1`), `parseSetup` (import validation), `cleanValue`, `cleanRule`, `cleanScope`/`normScope`/`scopeGroups`, `changed` (bumps `version`, marks results outdated), `replaceSetup`, `renderAll`.
+- **Step 1 attributes**: `renderAttributes`, `optionChips`/`removeOption`, `deleteAttribute` (confirm + cascade; removes whole rules using it — `ruleUsesAttr`), `syncAttrKind`, `validAttrName`.
+- **Step 2 people**: `renderTable`/`personRow`/`onCellEdit`, `flagDuplicates`; **Clear all** = `els.peopleClear` handler (~l.588; button `#gd-people-clear`, hidden when empty); paste import = `parseDelimited` → `guessMapping` → `planImport` → `renderPastePreview` → `commitPaste`.
+- **Step 3 groups & rules**: `renderGroups` (count, group name word `#gd-group-word`, per-group names, balance/best-effort), `ruleAttrs(type)` (which attrs each rule type may target; labels only for `count`), `scopePicker`/`scopeSummary` (all / one / multi-group scope), `renderRuleForm`, `labelValues` (distinct label values present in data → count-rule dropdown, kept in sync) , `renderValueField`, **compound conditions**: `andRows`/`fillAndRow`/`refreshAndRows`/`addAndRow` (extra `+ and condition` rows; `MAX_CONDITIONS`=4, each attribute once — attribute options already used are disabled in the other rows so clashes are impossible), rule submit handler (~l.1091, `fail()` messages), `overrides`/`ruleTarget`/`renderRules` (rule list; compound rules render as one tinted block with `AND` badges, `.gd-cond*`), `renderHints` (calls `Solver.validateHints`).
+- **Rule shape helpers**: `ruleConds(rule)` = main condition + `rule.and[]`; `condsKey` identifies a condition set; `cleanRule` sanitises on import.
+- **Step 4 draw**: `getWorker`/`solveAsync`/`stopWorker` (inline Blob Worker built from `Solver.createSolver.toString()`; falls back to main thread if `workerBroken`), `draw`, `finish`, `renderFailure`, `showStatus`, `makeEntry`, `display` (card-by-card reveal; instant under reduced motion), `composition`, `renderViolations`.
+- **Partial redraw**: `partialActive`, `partialPlan` (builds a sub-setup of the unkept groups, scope-remapped), `mergePartial` (merges + re-evaluates against full setup), `renderPartial`, `keepBox` (🔒 Keep checkbox per card; only offered when shown draw matches current `version`).
+- **Output**: `renderHistory`/`renderHistoryCurrent` (last 10, memory only), `resultText` (copy format), `resultCsv`/`csvCell` (formula-injection-safe), `download`.
+- **Wiring**: bottom of file — Load example, Reset all, Clear saved data, import/export handlers; `hasContent` gates confirmations.
+
+### 11.3 `group_draw_solver.js` (public API: `normalizeRules, validateHints, scopeHas, solve, bestEffort, evaluate, run, blame, describeRule`)
+
+- Limits (top): `NODE_LIMIT` 50000, `TIME_MS` 1500, `FAST_TRIES` 200, `BLAME_RULES` 30.
+- `conditionsOf`/`condText`/`usable`: compound count rules; a rule with contradicting conditions (same attr, different values) is *unusable* → ignored.
+- `normalizeRules` builds the model `m`: size bounds (balance or rules), `counts` keyed by sorted condition set (same set ⇒ intersect; `matches` = all conds), `sums`, `aparts`, `together` blocks. Label values compare as exact text; empty never matches.
+- `fastPath` (rejection sampling) → `backtrack` (randomized, with `prune`/`canPlace`/`countOk`/`sumOk`/`apartOk`) → repair/`bestEffortModel` (hill climbing); `solveModel` chains them; `run` = strict/best-effort entry used by the UI; `validateHints` = live hints; `blame` = drop-one-rule culprit search; `evaluate` recomputes violations for any assignment (used by partial-redraw merge).
+- All shuffles use `shuffle()` → `randomIndex` (never `Math.random`).
+
+### 11.4 Changelog since `9b7b0e3` (feature → where)
+
+| Commit | Feature | Touches |
+|---|---|---|
+| 9b7b0e3 | Label attributes allowed in count rules | `ruleAttrs`, `labelValues`, solver `usable`/counts |
+| 57dc60d | Copy-as-text = comma-separated names per group | `resultText` |
+| add9b39 | Partial redraw (🔒 Keep) + multi-group rule scope | `partial*`, `keepBox`, `scopePicker`; solver `scopeHas`/`scoped` |
+| eb2408c | Configurable group name word (`groups.label`) | `groupWord`, `#gd-group-word`; solver `groupName` |
+| 864c814 | Global light/dark toggle | `theme.js`, CSS tokens |
+| dfe3361, 553cd2b, 2439b77 | Compound count rules, block highlight, clash-proof form | `andRows` family, `ruleConds`; solver `conditionsOf`; CSS `.gd-and*`/`.gd-cond*` |
+| 60b446d | Themed `<select>` (dark-mode white-on-white fix) | CSS `.gd-view select` |
+| 8eb9283 | People "Clear all" | `#gd-people-clear` |
+
+### 11.5 Test lookup (`tests/test_app.py`)
+
+Tabs `test_gd_tabs_*` · attributes/people/paste `test_gd_attributes_*`, `*_people_*`, `*_paste_*` · rules/scope `test_gd_rules_*`, `*_scope_*`, `*_multi_group_*` · label rules `test_gd_label_count_rule_*` · compound `test_gd_compound_*` · partial `test_gd_partial_*` · group word `test_gd_group_word_*` · draw/fairness `test_gd_strict_*`, `*_uniformity_*`, `*_performance_*` · IO `*_export_*`, `*_import_*`, `*_autosaved_*`, `*_csv_*` · theme `test_theme_*` · clear all `test_gd_people_clear_all`.
