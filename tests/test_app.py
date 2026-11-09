@@ -1558,7 +1558,7 @@ def test_gd_label_count_rule_exact_text_and_empty_ignored(page):
 
 
 def test_gd_label_count_rule_in_ui(page):
-    """Labels are count-rule targets with a dropdown of distinct values that follows the table; not offered elsewhere."""
+    """Labels are count-rule targets with a dropdown of distinct values that follows the table; never offered for sums."""
     page.emulate_media(reduced_motion="reduce")
     _gd_open(page)
     _gd_import(page, _gd_setup(people=[], groups=2))
@@ -1593,15 +1593,15 @@ def test_gd_label_count_rule_in_ui(page):
         groups = _gd_draw(page)
         assert len(groups) == 2 and sum(len(g) for g in groups) == 7
         assert all(sum(1 for pid in g if pid in smiths) <= 1 for g in groups)
-    # Labels are not offered for sum / keep apart / keep together.
-    for rtype in ("sum", "apart", "together"):
+    # Labels are offered for keep apart / keep together / spread evenly, but never for sums.
+    for rtype, offered in (("sum", False), ("apart", True), ("together", True), ("even", True)):
         page.select_option("#gd-rule-type", rtype)
         attrs = page.eval_on_selector_all("#gd-rule-attr option", "os => os.map(o => o.value)")
-        assert "a-sur" not in attrs
+        assert ("a-sur" in attrs) == offered
 
 
 def test_gd_label_count_rule_survives_export_import_and_autosave(page):
-    """A label count rule round-trips through export/import and autosave; label keep-apart is still rejected."""
+    """A label count rule round-trips through export/import and autosave; a sum rule on a label is rejected."""
     _gd_open(page)
     setup = _gd_setup(people=_gd_sur(["Smith", "Jones", "Smith", "Lee"]), groups=2, rules=[SMITH_MAX1])
     _gd_import(page, setup)
@@ -1616,8 +1616,8 @@ def test_gd_label_count_rule_survives_export_import_and_autosave(page):
     page.click("#tab-group-draw")
     assert page.locator(".gd-rule[data-type='count']").count() == 1
     assert page.text_content(".gd-rule .gd-rule-target") == "surname = Smith"
-    # Keep apart on a label is out of scope: the import is refused and the setup kept.
-    bad = dict(setup, rules=[{"id": "ra", "type": "apart", "scope": "all", "attrId": "a-sur", "k": 1}])
+    # A sum over a label makes no sense: the import is refused and the setup kept.
+    bad = dict(setup, rules=[{"id": "ra", "type": "sum", "scope": "all", "attrId": "a-sur", "min": 1, "max": 2}])
     page.set_input_files("#gd-import-file", files=[{
         "name": "bad.json", "mimeType": "application/json", "buffer": json.dumps(bad).encode()}])
     page.wait_for_function(
@@ -1897,3 +1897,533 @@ def test_gd_compound_count_rule_in_ui(page):
     assert page.get_attribute(".gd-rule .gd-rule-target", "title") == "type = manager and team = 1"
     page.locator(".gd-attr-row").nth(2).locator(".gd-chip", has_text="manager").locator("button").click()
     assert page.locator(".gd-rule").count() == 0
+
+
+# ---- Group Draw: attendance, spread evenly, person rules, nice-to-have, rounds, adjust, presenter ----
+
+
+def _gd_run_opts(page, setup, opts):
+    return page.evaluate("([s, o]) => GroupDrawSolver.run(s, o)", [setup, opts])
+
+
+def _gd_where(groups):
+    return {pid: gi for gi, ids in enumerate(groups) for pid in ids}
+
+
+def test_gd_absent_people_skip_the_draw(page):
+    """Attendance: unticking "Here" keeps the person in the list but out of the draw, hints and counts."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    setup = _gd_setup(n=10, groups=2)
+    _gd_import(page, setup)
+    assert page.is_hidden("#gd-people-present")
+    for pid in ("p0", "p3"):
+        page.uncheck(f"#gd-people-table tr[data-person-id='{pid}'] .gd-here")
+    assert page.text_content("#gd-people-count").startswith("8 people · 2 away")
+    assert "8 people" in page.text_content("#gd-meta-people")
+    assert page.locator("#gd-people-table tr.is-absent").count() == 2
+    groups = _gd_draw(page)
+    ids = sorted(sum(groups, []))
+    assert ids == sorted(f"p{i}" for i in range(10) if i not in (0, 3))
+    assert sorted(len(g) for g in groups) == [4, 4]
+    # Absence is part of the setup: exported, autosaved and restored.
+    with page.expect_download() as dl:
+        page.click("#gd-export")
+    exported = json.loads(Path(dl.value.path()).read_text())
+    assert [p["id"] for p in exported["people"] if p.get("absent")] == ["p0", "p3"]
+    assert len(exported["people"]) == 10
+    page.wait_for_function(
+        "() => (JSON.parse(localStorage.getItem('groupDraw.setup.v1') || '{}').people || []).filter(p => p.absent).length === 2",
+        timeout=4000)
+    page.reload()
+    page.click("#tab-group-draw")
+    assert page.locator("#gd-people-table tr.is-absent").count() == 2
+    # One click brings everyone back.
+    page.click("#gd-people-present")
+    assert page.text_content("#gd-people-count").startswith("10 people")
+    assert page.is_hidden("#gd-people-present")
+    assert len(sum(_gd_draw(page), [])) == 10
+
+
+def test_gd_everyone_absent_explains_itself(page):
+    """With every person away the draw gives guidance instead of an empty result."""
+    _gd_open(page)
+    people = [dict(p, absent=True) for p in _gd_people(4)]
+    _gd_import(page, _gd_setup(people=people, groups=2))
+    page.click("#gd-draw")
+    page.wait_for_function("() => document.querySelector('#gd-status').textContent.includes('away')", timeout=4000)
+    assert page.locator("#gd-results .gd-card").count() == 0
+    res = _gd_run(page, _gd_setup(people=people, groups=2))
+    assert res["status"] == "empty"
+
+
+def test_gd_spread_evenly_by_value(page):
+    """"Spread evenly" gives every group floor/ceil of each value's share — without the user doing the arithmetic."""
+    setup = _gd_setup(n=30, groups=4, rules=[{"id": "e", "type": "even", "attrId": "a-type"}])
+    people = {p["id"]: p for p in setup["people"]}
+    totals = {}
+    for p in setup["people"]:
+        totals[p["values"]["a-type"]] = totals.get(p["values"]["a-type"], 0) + 1
+    for _ in range(25):
+        res = _gd_run(page, setup)
+        assert res["status"] == "ok" and res["violations"] == [] and res["notes"] == []
+        for g in res["groups"]:
+            for value, total in totals.items():
+                c = sum(1 for pid in g if people[pid]["values"]["a-type"] == value)
+                assert total // 4 <= c <= -(-total // 4), (value, c)
+    # The limits follow the people: with 3 managers away the share shrinks, still feasible.
+    away = [p["id"] for p in setup["people"] if p["values"]["a-type"] == "manager"][:3]
+    setup2 = dict(setup, people=[dict(p, absent=True) if p["id"] in away else p for p in setup["people"]])
+    res = _gd_run(page, setup2)
+    assert res["status"] == "ok" and len(sum(res["groups"], [])) == 27
+
+
+def test_gd_spread_evenly_by_total_is_nice_to_have(page):
+    """Balancing a total never blocks a draw and brings the group sums close together."""
+    skills = [1, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 8, 8, 9, 10, 12]
+    setup = _gd_setup(people=_gd_ppl(skills), groups=4,
+                      rules=[{"id": "es", "type": "even", "attrId": "a-team", "by": "sum"}])
+    by_id = {p["id"]: p["values"]["a-team"] for p in setup["people"]}
+    spreads = []
+    for _ in range(15):
+        res = _gd_run(page, setup)
+        assert res["status"] == "ok" and res["violations"] == []
+        assert sorted(len(g) for g in res["groups"]) == [4, 4, 4, 4]
+        sums = [sum(by_id[i] for i in g) for g in res["groups"]]
+        spreads.append(max(sums) - min(sums))
+    plain = []
+    for _ in range(15):
+        res = _gd_run(page, dict(setup, rules=[]))
+        sums = [sum(by_id[i] for i in g) for g in res["groups"]]
+        plain.append(max(sums) - min(sums))
+    assert max(spreads) <= 4, spreads
+    assert sum(spreads) / len(spreads) < sum(plain) / len(plain)
+    # A total can only be balanced for numbers; cleanly ignored otherwise.
+    bad = _gd_setup(n=8, groups=2, rules=[{"id": "es", "type": "even", "attrId": "a-type", "by": "sum"}])
+    assert _gd_run(page, bad)["status"] == "ok"
+
+
+def test_gd_label_keep_apart_and_together(page):
+    """Keep apart / keep together now work on label attributes (exact text, empty ignored)."""
+    people = _gd_sur(["Smith", "Smith", "Smith", "Jones", "Jones", None, "Lee", "", "Kim", "Ng", "Oh", "Wu"])
+    apart = _gd_setup(people=people, groups=3, rules=[{"id": "a", "type": "apart", "scope": "all", "attrId": "a-sur", "k": 1}])
+    together = _gd_setup(people=people, groups=3,
+                         rules=[{"id": "t", "type": "together", "scope": "all", "attrId": "a-sur", "values": ["Smith"]}])
+    for _ in range(20):
+        res = _gd_run(page, apart)
+        assert res["status"] == "ok" and _gd_check(apart, res["groups"]) == []
+        for g in res["groups"]:
+            assert sum(1 for i in g if i in ("p0", "p1", "p2")) == 1
+            assert sum(1 for i in g if i in ("p3", "p4")) <= 1
+        res = _gd_run(page, together)
+        assert res["status"] == "ok" and _gd_check(together, res["groups"]) == []
+        w = _gd_where(res["groups"])
+        assert w["p0"] == w["p1"] == w["p2"]
+    # Four Smiths cannot be kept apart in three groups: hinted before drawing.
+    four = dict(apart, people=_gd_sur(["Smith"] * 4 + ["Lee", "Kim"]))
+    hints = page.evaluate("s => GroupDrawSolver.validateHints(s)", four)
+    assert any(h["level"] == "error" and "surname = Smith" in h["message"] for h in hints)
+    assert _gd_run(page, four)["status"] == "infeasible"
+
+
+PIN = {"id": "pin", "type": "pin", "personId": "p0", "group": 2}
+WITH = {"id": "with", "type": "pair", "mode": "together", "people": ["p1", "p2"]}
+WITHOUT = {"id": "without", "type": "pair", "mode": "apart", "people": ["p3", "p4"]}
+
+
+def test_gd_person_rules_honoured_by_solver(page):
+    """Pin, "A with B" and "A not with B" hold on every draw and combine with attribute rules."""
+    setup = _gd_setup(n=24, groups=4, rules=[PIN, WITH, WITHOUT] + GD_RULES[:1])
+    seen = set()
+    for _ in range(30):
+        res = _gd_run(page, setup)
+        assert res["status"] == "ok", res
+        assert _gd_check(setup, res["groups"]) == []
+        w = _gd_where(res["groups"])
+        assert w["p0"] == 2 and w["p1"] == w["p2"] and w["p3"] != w["p4"]
+        seen.add(tuple(sorted(tuple(sorted(g)) for g in res["groups"])))
+    assert len(seen) >= 2
+    # Rules about people who are away (or gone) are simply skipped.
+    away = dict(setup, people=[dict(p, absent=True) if p["id"] in ("p0", "p3") else p for p in setup["people"]])
+    res = _gd_run(page, away)
+    assert res["status"] == "ok" and len(sum(res["groups"], [])) == 22
+
+
+def test_gd_person_rule_conflicts_are_explained(page):
+    """Contradicting person rules give a live hint and a blamed strict failure."""
+    both = _gd_setup(n=8, groups=2, rules=[
+        {"id": "t", "type": "pair", "mode": "together", "people": ["p1", "p2"]},
+        {"id": "a", "type": "pair", "mode": "apart", "people": ["p1", "p2"]}])
+    hints = page.evaluate("s => GroupDrawSolver.validateHints(s)", both)
+    assert any(h["level"] == "error" and "both together and apart" in h["message"] for h in hints)
+    res = _gd_run(page, both)
+    assert res["status"] == "infeasible" and len(res["blame"]) == 2
+    twice = _gd_setup(n=8, groups=2, rules=[PIN | {"group": 0}, PIN | {"id": "pin2", "group": 1}])
+    hints = page.evaluate("s => GroupDrawSolver.validateHints(s)", twice)
+    assert any("pinned to more than one group" in h["message"] for h in hints)
+    # Two pinned people who must also stay together, in different groups: no hint, but still explained.
+    clash = _gd_setup(n=8, groups=2, rules=[
+        PIN | {"group": 0}, {"id": "pin2", "type": "pin", "personId": "p1", "group": 1},
+        {"id": "t", "type": "pair", "mode": "together", "people": ["p0", "p1"]}])
+    res = _gd_run(page, clash)
+    assert res["status"] == "infeasible" and res["blame"]
+
+
+def test_gd_person_rules_in_ui(page):
+    """Pin and pair rules are created from the form, drawn, pruned with their people, and round-trip."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    setup = _gd_setup(n=12, groups=3)
+    _gd_import(page, setup)
+    page.select_option("#gd-rule-type", "pin")
+    page.select_option("#gd-rule-person", "p5")
+    page.select_option("#gd-rule-group", "1")
+    page.click("#gd-rule-add")
+    assert page.text_content(".gd-rule[data-type='pin'] .gd-rule-target") == "Person 5 → Group 2"
+    # One pin per person.
+    page.click("#gd-rule-add")
+    assert "already pinned" in page.text_content("#gd-rule-error")
+    page.select_option("#gd-rule-type", "pair")
+    page.select_option("#gd-rule-person", "p0")
+    page.select_option("#gd-rule-person2", "p0")
+    page.click("#gd-rule-add")
+    assert "two different people" in page.text_content("#gd-rule-error")
+    page.select_option("#gd-rule-person2", "p1")
+    assert page.is_disabled("#gd-rule-soft")  # "together" is always a must
+    page.click("#gd-rule-add")
+    page.select_option("#gd-rule-mode", "apart")
+    page.select_option("#gd-rule-person", "p2")
+    page.select_option("#gd-rule-person2", "p3")
+    assert page.is_enabled("#gd-rule-soft")
+    page.click("#gd-rule-add")
+    targets = page.eval_on_selector_all(".gd-rule[data-type='pair'] .gd-rule-target", "els => els.map(e => e.textContent)")
+    assert targets == ["Person 0 with Person 1", "Person 2 not with Person 3"]
+    for _ in range(5):
+        w = _gd_where(_gd_draw(page))
+        assert w["p5"] == 1 and w["p0"] == w["p1"] and w["p2"] != w["p3"]
+    # Partial redraw keeps honouring them.
+    page.check("#gd-partial")
+    page.check("#gd-results .gd-card[data-group='0'] .gd-keep input")
+    w = _gd_where(_gd_draw(page))
+    assert w["p5"] == 1 and w["p0"] == w["p1"] and w["p2"] != w["p3"]
+    # Renaming a person renames the rule; export keeps the rules.
+    page.fill("#gd-people-table tr[data-person-id='p5'] input[data-field='name']", "Zed")
+    assert page.text_content(".gd-rule[data-type='pin'] .gd-rule-target") == "Zed → Group 2"
+    with page.expect_download() as dl:
+        page.click("#gd-export")
+    exported = json.loads(Path(dl.value.path()).read_text())
+    assert [(r["type"], r.get("mode")) for r in exported["rules"]] == [("pin", None), ("pair", "together"), ("pair", "apart")]
+    assert exported["rules"][0]["personId"] == "p5" and exported["rules"][0]["group"] == 1
+    # Deleting the people removes their rules, with a notice.
+    page.click("#gd-people-table tr[data-person-id='p5'] .gd-person-delete")
+    assert page.locator(".gd-rule[data-type='pin']").count() == 0
+    assert "no longer in the list" in page.text_content("#gd-rules-notice")
+    page.click("#gd-people-table tr[data-person-id='p0'] .gd-person-delete")
+    assert page.locator(".gd-rule[data-type='pair']").count() == 1
+    # Shrinking the groups drops pins that point at a removed group.
+    _gd_import(page, dict(setup, rules=[PIN]))
+    assert page.locator(".gd-rule[data-type='pin']").count() == 1
+    page.fill("#gd-group-count", "2")
+    page.dispatch_event("#gd-group-count", "change")
+    assert page.locator(".gd-rule[data-type='pin']").count() == 0
+    # An imported rule about an unknown person is refused.
+    page.evaluate("() => { document.querySelector('#gd-io-notice').classList.remove('is-error'); }")
+    page.set_input_files("#gd-import-file", files=[{
+        "name": "bad.json", "mimeType": "application/json",
+        "buffer": json.dumps(dict(setup, rules=[PIN | {"personId": "nobody"}])).encode()}])
+    page.wait_for_function(
+        "() => document.querySelector('#gd-io-notice').classList.contains('is-error')", timeout=4000)
+
+
+MANAGERS_MIN3 = {"id": "m3", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager", "min": 3, "max": None}
+
+
+def test_gd_nice_to_have_rule_never_blocks_a_draw(page):
+    """A must rule that cannot be met fails the draw; the same rule as nice-to-have is met as closely as possible."""
+    hard = _gd_setup(n=20, groups=4, rules=[MANAGERS_MIN3])  # only 5 managers for 4 × 3
+    assert _gd_run(page, hard)["status"] == "infeasible"
+    soft = _gd_setup(n=20, groups=4, rules=[MANAGERS_MIN3 | {"soft": True}])
+    hints = page.evaluate("s => GroupDrawSolver.validateHints(s)", soft)
+    assert hints and all(h["level"] == "warning" for h in hints)
+    people = {p["id"]: p for p in soft["people"]}
+    for _ in range(10):
+        res = _gd_run(page, soft)
+        assert res["status"] == "ok" and res["violations"] == []
+        assert res["notes"] and all(n["soft"] for n in res["notes"])
+        assert sorted(len(g) for g in res["groups"]) == [5, 5, 5, 5]
+        short = sum(max(0, 3 - sum(1 for i in g if people[i]["values"]["a-type"] == "manager")) for g in res["groups"])
+        assert short == 7  # 12 wanted, 5 exist: nothing is wasted
+    # Must rules still win: the nice-to-have rule gives way, never the must rule.
+    both = _gd_setup(n=20, groups=4, rules=[
+        MANAGERS_MIN3 | {"soft": True, "scope": 0},
+        {"id": "m1", "type": "count", "scope": 0, "attrId": "a-type", "value": "manager", "min": None, "max": 1}])
+    for _ in range(10):
+        res = _gd_run(page, both)
+        assert res["status"] == "ok"
+        assert sum(1 for i in res["groups"][0] if people[i]["values"]["a-type"] == "manager") == 1
+    # A feasible nice-to-have rule is fully met and leaves no notes.
+    easy = _gd_setup(n=20, groups=4, rules=[MANAGERS_MIN3 | {"min": 1, "soft": True}])
+    for _ in range(10):
+        res = _gd_run(page, easy)
+        assert res["status"] == "ok" and res["notes"] == [] and _gd_check(easy, res["groups"]) == []
+
+
+def test_gd_nice_to_have_in_ui(page):
+    """The priority is set in the form, toggled in the rule list, shown as a note after drawing, and exported."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=20, groups=4))
+    page.select_option("#gd-rule-type", "size")
+    assert page.is_hidden("#gd-rule-soft")  # size rules are always a must
+    page.select_option("#gd-rule-type", "count")
+    page.select_option("#gd-rule-soft", "soft")
+    _gd_add_rule(page, "count", "a-type", "manager", vmin=3)
+    assert page.locator(".gd-rule.is-soft").count() == 1
+    assert page.locator(".gd-hint.is-error").count() == 0
+    assert page.locator(".gd-hint.is-warning").count() == 1
+    groups = _gd_draw(page)
+    assert len(sum(groups, [])) == 20 and page.is_hidden("#gd-alert")
+    assert page.is_visible("#gd-notes")
+    assert "Nice to have" in page.text_content("#gd-notes")
+    assert "Drew 4 groups." in page.text_content("#gd-status")
+    with page.expect_download() as dl:
+        page.click("#gd-export")
+    assert json.loads(Path(dl.value.path()).read_text())["rules"][0]["soft"] is True
+    # Untick "nice to have": it is a must again, so the draw fails with an explanation.
+    page.uncheck(".gd-rule .gd-rule-soft input")
+    assert page.locator(".gd-rule.is-soft").count() == 0
+    assert page.locator(".gd-hint.is-error").count() == 1
+    _gd_draw(page)
+    assert page.is_visible("#gd-alert") and "can’t all be met" in page.text_content("#gd-alert")
+    # Spread evenly from the form.
+    page.click(".gd-rule .gd-rule-delete")
+    page.select_option("#gd-rule-type", "even")
+    page.select_option("#gd-rule-attr", "a-type")
+    assert page.is_disabled("#gd-rule-by option[value='sum']")
+    page.click("#gd-rule-add")
+    assert page.text_content(".gd-rule[data-type='even'] .gd-rule-target") == "Spread type evenly"
+    page.select_option("#gd-rule-attr", "a-team")
+    page.select_option("#gd-rule-by", "sum")
+    assert page.is_disabled("#gd-rule-soft") and page.input_value("#gd-rule-soft") == "soft"
+    page.click("#gd-rule-add")
+    assert page.text_content(".gd-rule[data-type='even'].is-soft .gd-rule-target") == "Balance the total of team"
+    groups = _gd_draw(page)
+    assert len(sum(groups, [])) == 20
+    assert "Σ team" in page.text_content("#gd-results .gd-card .gd-comp")
+
+
+def test_gd_best_effort_weighs_sums_in_people_not_points(page):
+    """A sum that is off by a few points no longer outweighs a head-count rule in best effort."""
+    # 8 people worth 100 each; sum max 150 per group is hopeless, "max 1 manager" is easy.
+    people = [{"id": f"p{i}", "name": f"P{i}", "values": {"a-team": 100, "a-type": "manager" if i < 2 else "developer"}}
+              for i in range(8)]
+    setup = _gd_setup(people=people, groups=2, best_effort=True, rules=[
+        {"id": "s", "type": "sum", "scope": "all", "attrId": "a-team", "min": None, "max": 150},
+        {"id": "c", "type": "count", "scope": "all", "attrId": "a-type", "value": "manager", "min": None, "max": 1}])
+    for _ in range(10):
+        res = _gd_run(page, setup)
+        assert res["status"] == "best-effort"
+        assert sorted(len(g) for g in res["groups"]) == [4, 4]
+        assert all(sum(1 for i in g if i in ("p0", "p1")) == 1 for g in res["groups"])
+        assert {v["kind"] for v in res["violations"]} == {"sum"}
+
+
+def test_gd_rounds_avoid_repeat_pairings(page):
+    """Several rounds in one go: every round is a full valid split and pairs meet again as rarely as possible."""
+    people = [{"id": f"p{i}", "name": f"P{i}", "values": {}} for i in range(16)]
+    setup = dict(_gd_setup(people=people, groups=4), attributes=[])
+    for _ in range(5):
+        res = _gd_run_opts(page, setup, {"rounds": 3})
+        assert res["status"] == "ok" and len(res["rounds"]) == 3
+        met = set()
+        for rnd in res["rounds"]:
+            assert sorted(sum(rnd["groups"], [])) == sorted(p["id"] for p in people)
+            assert sorted(len(g) for g in rnd["groups"]) == [4, 4, 4, 4]
+            pairs = {(a, b) for g in rnd["groups"] for a in g for b in g if a < b}
+            assert len(pairs & met) == rnd["repeats"] == 0  # 16 into 4×4 can avoid every repeat for 3 rounds
+            met |= pairs
+    # Rules hold in every round, and "avoid" works against splits handed in from earlier draws.
+    ruled = _gd_setup(n=24, groups=4, rules=GD_RULES[:2] + [WITH])
+    res = _gd_run_opts(page, ruled, {"rounds": 4})
+    assert len(res["rounds"]) == 4
+    for rnd in res["rounds"]:
+        assert rnd["status"] == "ok" and _gd_check(ruled, rnd["groups"]) == []
+        w = _gd_where(rnd["groups"])
+        assert w["p1"] == w["p2"]
+    first = _gd_run(page, setup)["groups"]
+    again = _gd_run_opts(page, setup, {"avoid": [first]})
+    old = {(a, b) for g in first for a in g for b in g if a < b}
+    new = {(a, b) for g in again["groups"] for a in g for b in g if a < b}
+    assert again["repeats"] == len(old & new) == 0
+    # The rounds option is clamped; one round keeps the plain result shape.
+    assert "rounds" not in _gd_run_opts(page, setup, {"rounds": 1})
+    assert len(_gd_run_opts(page, setup, {"rounds": 99})["rounds"]) == 10
+
+
+def test_gd_rounds_in_ui(page):
+    """Rounds are switched with a round bar; copy and CSV carry every round; "avoid repeats" reports back."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    people = [{"id": f"p{i}", "name": f"P{i}", "values": {}} for i in range(16)]
+    _gd_import(page, dict(_gd_setup(people=people, groups=4), attributes=[]))
+    assert page.is_hidden("#gd-rounds-nav") and page.is_hidden("#gd-rounds-hint")
+    page.fill("#gd-rounds", "3")
+    page.dispatch_event("#gd-rounds", "change")
+    assert page.is_visible("#gd-rounds-hint")
+    round1 = _gd_draw(page)
+    assert "Drew 3 rounds of 4 groups." in page.text_content("#gd-status")
+    assert page.locator("#gd-rounds-nav .gd-round-btn").count() == 3
+    assert page.get_attribute("#gd-rounds-nav .gd-round-btn[data-round='1']", "aria-pressed") == "true"
+    assert page.locator("#gd-history .gd-history-btn").count() == 1  # one draw, three rounds
+    page.click("#gd-rounds-nav .gd-round-btn[data-round='2']")
+    round2 = _gd_card_ids(page)
+    assert page.get_attribute("#gd-results", "data-round") == "2"
+    assert sorted(sum(round2, [])) == sorted(sum(round1, [])) and round2 != round1
+    assert "met before" in page.text_content("#gd-rounds-nav .gd-round-info")
+    page.evaluate("() => { navigator.clipboard.writeText = t => { window.__copied = t; return Promise.resolve(); }; }")
+    page.click("#gd-copy")
+    text = page.evaluate("() => window.__copied")
+    assert [l for l in text.splitlines() if l.startswith("Round ")] == ["Round 1", "Round 2", "Round 3"]
+    with page.expect_download() as dl:
+        page.click("#gd-csv")
+    lines = Path(dl.value.path()).read_text().strip().splitlines()
+    assert lines[0] == "round,group,name" and len(lines) == 1 + 3 * 16
+    assert sorted(l.split(",")[0] for l in lines[1:]) == ["1"] * 16 + ["2"] * 16 + ["3"] * 16
+    # A bad value is clamped; one round with "avoid repeat pairings" checks against this session's draws.
+    page.fill("#gd-rounds", "0")
+    page.dispatch_event("#gd-rounds", "change")
+    assert page.input_value("#gd-rounds") == "1"
+    page.check("#gd-fresh")
+    _gd_draw(page)
+    assert page.locator("#gd-rounds-nav .gd-round-btn").count() == 0
+    assert page.is_visible("#gd-rounds-nav .gd-round-info")
+    assert page.locator("#gd-history .gd-history-btn").count() == 2
+
+
+def test_gd_manual_adjust_swap_and_move(page):
+    """Tap a name then another to swap, or "Move here" to move; the result is re-checked against the rules."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    before = _gd_draw(page)
+    assert page.is_visible("#gd-adjust-hint")
+    a, b = before[0][0], before[1][0]
+    page.click(f"#gd-results .gd-member[data-person-id='{a}']")
+    assert page.get_attribute(f"#gd-results .gd-member[data-person-id='{a}']", "aria-pressed") == "true"
+    assert page.locator("#gd-results .gd-move-here:visible").count() == 2
+    # Tapping the same name again cancels.
+    page.click(f"#gd-results .gd-member[data-person-id='{a}']")
+    assert page.locator("#gd-results .is-picked").count() == 0
+    page.click(f"#gd-results .gd-member[data-person-id='{a}']")
+    page.click(f"#gd-results .gd-member[data-person-id='{b}']")
+    after = _gd_card_ids(page)
+    assert b in after[0] and a in after[1]
+    assert sorted(sum(after, [])) == sorted(sum(before, []))
+    assert "Swapped" in page.text_content("#gd-status") and page.is_hidden("#gd-alert")
+    assert page.locator("#gd-history .gd-history-btn").count() == 2
+    assert "edited" in page.locator("#gd-history .gd-history-btn").first.text_content()
+    # Moving breaks the balance: allowed, but flagged.
+    page.click(f"#gd-results .gd-member[data-person-id='{a}']")
+    page.click("#gd-results .gd-card[data-group='2'] .gd-move-here")
+    moved = _gd_card_ids(page)
+    assert a in moved[2] and sorted(len(g) for g in moved) == [3, 4, 5]
+    assert page.is_visible("#gd-alert") and "After your changes" in page.text_content("#gd-alert")
+    assert "now broken" in page.text_content("#gd-status")
+    # Keyboard: Enter picks, Escape cancels.
+    page.focus(f"#gd-results .gd-member[data-person-id='{b}']")
+    page.keyboard.press("Enter")
+    assert page.locator("#gd-results .is-picked").count() == 1
+    page.keyboard.press("Escape")
+    assert page.locator("#gd-results .is-picked").count() == 0
+    # The undo is the history: the untouched draw is still there.
+    page.locator("#gd-history .gd-history-btn").last.click()
+    assert _gd_card_ids(page) == before
+    # Editing the setup switches adjusting off until the next draw.
+    page.fill("#gd-people-table tbody tr:first-child input[data-field='name']", "Renamed")
+    assert page.is_hidden("#gd-adjust-hint")
+    page.click(f"#gd-results .gd-member[data-person-id='{a}']", force=True)
+    assert page.locator("#gd-results .is-picked").count() == 0
+
+
+def test_gd_presenter_reveals_step_by_step(page):
+    """Presenter mode shows the finished draw full-screen and reveals it click by click."""
+    page.emulate_media(reduced_motion="reduce")
+    _gd_open(page)
+    _gd_import(page, _gd_setup(n=12, groups=3))
+    groups = _gd_draw(page)
+    page.click("#gd-present")
+    page.wait_for_selector(".gd-present")
+    assert page.locator(".gd-present-card").count() == 3
+    assert page.locator(".gd-present-slot.is-shown").count() == 0
+    assert set(page.eval_on_selector_all(".gd-present-name", "els => els.map(e => e.textContent)")) == {"?"}
+    assert page.evaluate("document.activeElement.classList.contains('gd-present-next')")
+    page.click(".gd-present-next")
+    assert page.locator(".gd-present-slot.is-shown").count() == 1
+    first = page.get_attribute(".gd-present-slot.is-shown", "data-person-id")
+    assert first == groups[0][0]
+    assert "1 / 12 revealed" in page.text_content(".gd-present-progress")
+    assert "Person" in page.text_content(".gd-present-spot")
+    page.keyboard.press("ArrowRight")
+    assert page.locator(".gd-present-slot.is-shown").count() == 2
+    # Group by group starts over and reveals a whole group per step.
+    page.select_option(".gd-present-mode", "group")
+    assert page.locator(".gd-present-slot.is-shown").count() == 0
+    page.click(".gd-present-next")
+    assert page.locator(".gd-present-slot.is-shown").count() == 4
+    assert page.locator(".gd-present-card.is-complete").count() == 1
+    page.click(".gd-present-all")
+    assert page.locator(".gd-present-slot.is-shown").count() == 12
+    assert page.is_disabled(".gd-present-next")
+    shown = page.evaluate(
+        "() => Array.from(document.querySelectorAll('.gd-present-card'))"
+        ".map(c => Array.from(c.querySelectorAll('.gd-present-slot')).map(li => li.dataset.personId))")
+    assert shown == groups
+    assert "everyone" in page.text_content(".gd-present-spot").lower()
+    page.keyboard.press("Escape")
+    assert page.locator(".gd-present").count() == 0
+    assert page.evaluate("document.activeElement.id") == "gd-present"
+    # The draw itself is untouched by presenting it.
+    assert _gd_card_ids(page) == groups
+
+
+def test_gd_presenter_with_motion_and_mobile(page):
+    """With animations on and at 375px the presenter still fits the screen and finishes cleanly."""
+    page.set_viewport_size({"width": 375, "height": 700})
+    _gd_open(page)
+    page.click("#gd-load-example")
+    _gd_draw(page)
+    page.click("#gd-present")
+    page.wait_for_selector(".gd-present")
+    assert page.evaluate("document.querySelector('.gd-present').scrollWidth") <= 375
+    for _ in range(3):
+        page.click(".gd-present-next")
+    assert page.locator(".gd-present-slot.is-shown").count() == 3
+    page.click(".gd-present-all")
+    assert page.locator(".gd-confetti-bit").count() > 0
+    page.click(".gd-present-close")
+    assert page.locator(".gd-present").count() == 0
+    assert page.evaluate("document.documentElement.scrollWidth") <= 375
+
+
+def test_gd_new_rules_survive_export_import_roundtrip(page):
+    """Every new rule type, the nice-to-have flag and absences round-trip through export/import unchanged."""
+    _gd_open(page)
+    rules = [
+        {"id": "e1", "type": "even", "attrId": "a-type", "by": "value", "soft": True},
+        {"id": "e2", "type": "even", "attrId": "a-team", "by": "sum"},
+        {"id": "la", "type": "apart", "scope": "all", "attrId": "a-sur", "k": 1, "soft": True},
+        PIN | {"soft": True}, WITH, WITHOUT | {"soft": True},
+    ]
+    people = _gd_people(12)
+    people[4]["absent"] = True
+    setup = _gd_setup(people=people, groups=3, rules=rules)
+    _gd_import(page, setup)
+    assert page.locator(".gd-rule").count() == 6 and page.locator(".gd-rule.is-soft").count() == 5
+    with page.expect_download() as dl:
+        page.click("#gd-export")
+    exported = json.loads(Path(dl.value.path()).read_text())
+    assert exported["rules"] == rules
+    assert [p.get("absent", False) for p in exported["people"]] == [i == 4 for i in range(12)]
+    # "together" pairs and size rules can never be nice-to-have: the flag is dropped on import.
+    _gd_import(page, dict(setup, rules=[WITH | {"soft": True}, {"id": "s", "type": "size", "scope": "all", "min": 1, "max": 9, "soft": True}]))
+    assert page.locator(".gd-rule").count() == 2 and page.locator(".gd-rule.is-soft").count() == 0

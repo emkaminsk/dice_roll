@@ -1835,3 +1835,189 @@ body > .home-link > a {
   .gd-and-del { min-width: 44px; min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .gd-and-row { animation: none; } }
+
+/* --- Group Draw: attendance, person rules, nice-to-have, rounds, adjust, presenter --- */
+:root { --note: #0369a1; --note-soft: rgba(14, 165, 233, 0.1); }
+:root[data-theme="dark"] { --note: #7dd3fc; --note-soft: rgba(56, 189, 248, 0.12); }
+
+/* Attendance: people who are away stay in the list but look switched off. */
+.gd-step-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.gd-col-here { width: 44px; text-align: center !important; }
+.gd-table td.gd-col-here { vertical-align: middle; }
+.gd-here { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.gd-table tr.is-absent td:not(.gd-col-here):not(.gd-col-del) { opacity: 0.45; }
+.gd-table tr.is-absent [data-field="name"] { text-decoration: line-through; }
+
+/* New rule types + nice-to-have */
+.gd-rule-type-even { background: #14b8a6; }
+.gd-rule-type-pin { background: #8b5cf6; }
+.gd-rule-type-pair { background: #ef4444; }
+.gd-rule.is-soft { border-style: dashed; }
+.gd-rule-soft { font-size: 0.78rem; white-space: nowrap; }
+.gd-rule-note { font-size: 0.8rem; }
+
+/* Rounds + repeat pairings */
+.gd-draw-more { margin-top: 10px; }
+.gd-rounds-field { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 0.9rem; font-weight: 500; }
+.gd-rounds-field .narrow-input { width: 72px; }
+.gd-alert.is-note { background: var(--note-soft); border-color: var(--note); color: var(--ink); }
+.gd-alert.is-note .gd-alert-title { color: var(--note); }
+.gd-rounds-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; }
+.gd-round-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.gd-round-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard);
+}
+.gd-round-btn:hover { border-color: var(--accent); }
+.gd-round-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.gd-round-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1.5px var(--accent); }
+.gd-round-info { font-size: 0.82rem; color: var(--muted); font-weight: 500; }
+
+/* Manual adjust: pick a name, then swap or move. */
+.gd-adjust-hint { margin: 10px 0 0; }
+.gd-results.is-adjustable .gd-member { cursor: pointer; transition: background-color .15s, box-shadow .15s, transform .15s; }
+.gd-results.is-adjustable .gd-member:hover { background: var(--accent-soft); }
+.gd-results.is-adjustable .gd-member:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1.5px var(--accent); }
+.gd-member.is-picked,
+.gd-results.is-adjustable .gd-member.is-picked:hover {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+  transform: scale(1.03);
+}
+.gd-member.is-picked .gd-member-label { color: rgba(255, 255, 255, 0.85); }
+.gd-move-here { display: none; width: 100%; margin: 0 0 8px; }
+.gd-results.has-pick .gd-card:not(.has-picked) .gd-move-here { display: block; animation: gd-row-in var(--dur-base) var(--ease-standard) both; }
+.gd-results.has-pick .gd-card:not(.has-picked) { border-style: dashed; }
+
+/* Presenter: the draw on the big screen, revealed click by click. */
+body.gd-presenting { overflow: hidden; }
+.gd-present {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px clamp(14px, 3vw, 40px) 24px;
+  overflow: hidden; /* the controls and spotlight stay put; only the groups scroll */
+  color: var(--ink);
+  background:
+    radial-gradient(900px 520px at 10% -10%, var(--accent-soft), transparent 65%),
+    var(--bg);
+  animation: gd-present-in 0.3s var(--ease-standard) both;
+}
+.gd-present-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.gd-present-title { margin: 0; font-size: clamp(1.1rem, 2.4vw, 1.6rem); font-weight: 800; }
+.gd-present-progress { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+.gd-present-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.gd-present-mode { width: auto; background-color: var(--surface); color: var(--ink); }
+.gd-present-next { min-width: 150px; font-weight: 700; }
+.gd-present-spot {
+  flex: none;
+  min-height: clamp(96px, 18vh, 190px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 4px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  border-top: 5px solid var(--team-color, var(--accent));
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 14px 18px;
+}
+.gd-present-spot.is-fresh { animation: gd-pop 0.45s var(--ease-out-back) both; }
+.gd-present-spot-name { font-size: clamp(1.9rem, 7vw, 4.4rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; word-break: break-word; }
+.gd-present-spot-group { font-size: clamp(1rem, 2.6vw, 1.6rem); font-weight: 700; color: var(--team-color, var(--accent)); word-break: break-word; }
+.gd-present-spot-hint { color: var(--muted); font-size: clamp(1rem, 2.2vw, 1.3rem); font-weight: 600; }
+.gd-present-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: 14px;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px;
+  margin: 0 -4px;
+  -webkit-overflow-scrolling: touch;
+}
+.gd-present-card {
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--team-color, var(--accent));
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 12px 14px 14px;
+  transition: box-shadow var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-standard);
+}
+.gd-present-card.is-complete { box-shadow: 0 0 0 2px var(--team-color, var(--accent)), var(--shadow); }
+.gd-present-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.gd-present-card-head h3 { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--team-color, var(--accent)); word-break: break-word; }
+:root[data-theme="dark"] .gd-present-card-head h3,
+:root[data-theme="dark"] .gd-present-spot-group { filter: brightness(1.35); }
+.gd-present-count { font-size: 0.78rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.gd-present-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.gd-present-slot {
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 1.02rem;
+  word-break: break-word;
+}
+.gd-present-slot.is-shown { border-style: solid; color: var(--ink); }
+.gd-present-slot.is-nobody { color: var(--muted); font-weight: 500; }
+.gd-present-slot.is-popping { animation: gd-pop 0.4s var(--ease-out-back) both; }
+.gd-present-live { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+.gd-confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.gd-confetti-bit {
+  position: absolute;
+  top: -16px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: gd-confetti-fall 3s linear both;
+}
+@keyframes gd-confetti-fall {
+  0% { opacity: 1; transform: translateY(0) rotate(0); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(105vh) rotate(var(--gd-spin, 540deg)); }
+}
+@keyframes gd-present-in {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 576px) {
+  .gd-step-actions .btn { min-height: 44px; }
+  .gd-here { width: 22px; height: 22px; }
+  .gd-col-here { width: 48px; }
+  .gd-round-btn { min-height: 44px; padding: 8px 16px; }
+  .gd-results.is-adjustable .gd-member { min-height: 40px; align-items: center; }
+  .gd-move-here { min-height: 44px; }
+  .gd-present { padding: 12px 12px 20px; gap: 10px; }
+  .gd-present-controls { margin-left: 0; width: 100%; }
+  .gd-present-controls .btn, .gd-present-mode { min-height: 44px; }
+  .gd-present-next { flex: 1 1 100%; order: -1; }
+  .gd-present-spot { min-height: 84px; padding: 10px 14px; }
+  .gd-present-full { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gd-present, .gd-present-spot.is-fresh, .gd-present-slot.is-popping,
+  .gd-results.has-pick .gd-move-here { animation: none !important; }
+  .gd-results.is-adjustable .gd-member, .gd-round-btn, .gd-present-card { transition: none; }
+  .gd-member.is-picked { transform: none; }
+}

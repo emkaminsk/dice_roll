@@ -15,7 +15,9 @@
     '#ec4899', '#14b8a6', '#84cc16', '#f97316', '#06b6d4', '#a855f7',
   ];
   const KIND_LABEL = { label: 'Label', integer: 'Number', category: 'Category' };
-  const RULE_LABEL = { size: 'Size', count: 'Count', sum: 'Sum', apart: 'Apart', together: 'Together' };
+  const RULE_LABEL = { size: 'Size', count: 'Count', sum: 'Sum', apart: 'Apart', together: 'Together', even: 'Even', pin: 'Pin', pair: 'Pair' };
+  const SOFTABLE = { count: true, sum: true, apart: true, even: true, pin: true, pair: true };
+  const MAX_ROUNDS = 10;
 
   const $ = (sel) => view.querySelector(sel);
   const els = {
@@ -25,7 +27,7 @@
     attrList: $('#gd-attr-list'), attrForm: $('#gd-attr-form'), attrName: $('#gd-attr-name'),
     attrKind: $('#gd-attr-kind'), attrOptions: $('#gd-attr-options'), attrOptionsField: $('#gd-attr-options-field'),
     attrError: $('#gd-attr-error'),
-    peopleCount: $('#gd-people-count'), peopleSummary: $('#gd-people-summary'), peopleEmpty: $('#gd-people-empty'), peopleClear: $('#gd-people-clear'),
+    peopleCount: $('#gd-people-count'), peopleSummary: $('#gd-people-summary'), peopleEmpty: $('#gd-people-empty'), peopleClear: $('#gd-people-clear'), peoplePresent: $('#gd-people-present'),
     tableWrap: $('#gd-table-wrap'), table: $('#gd-people-table'),
     addPerson: $('#gd-add-person'), pasteToggle: $('#gd-paste-toggle'), paste: $('#gd-paste'),
     pasteText: $('#gd-paste-text'), pastePreview: $('#gd-paste-preview'), pasteCancel: $('#gd-paste-cancel'),
@@ -37,6 +39,8 @@
     ruleAnd: $('#gd-rule-and'), ruleAndRows: $('#gd-rule-and-rows'), ruleAndAdd: $('#gd-rule-and-add'),
     ruleValue: $('#gd-rule-value'), ruleValueNum: $('#gd-rule-value-num'), ruleValues: $('#gd-rule-values'),
     ruleMin: $('#gd-rule-min'), ruleMax: $('#gd-rule-max'), ruleK: $('#gd-rule-k'), ruleScope: $('#gd-rule-scope'),
+    ruleBy: $('#gd-rule-by'), rulePerson: $('#gd-rule-person'), rulePerson2: $('#gd-rule-person2'), ruleGroup: $('#gd-rule-group'),
+    ruleMode: $('#gd-rule-mode'), ruleSoft: $('#gd-rule-soft'),
     ruleAdd: $('#gd-rule-add'), ruleHelp: $('#gd-rule-help'), ruleError: $('#gd-rule-error'), hints: $('#gd-hints'),
     partial: $('#gd-partial'), partialWrap: $('#gd-partial-wrap'), partialHint: $('#gd-partial-hint'),
     draw: $('#gd-draw'), drawLabel: $('#gd-draw-label'), cancel: $('#gd-cancel'), showAttrs: $('#gd-show-attrs'),
@@ -44,6 +48,8 @@
     results: $('#gd-results'), actions: $('#gd-result-actions'), copy: $('#gd-copy'), csv: $('#gd-csv'),
     copyFallback: $('#gd-copy-fallback'), copyText: $('#gd-copy-text'),
     historyWrap: $('#gd-history-wrap'), history: $('#gd-history'),
+    rounds: $('#gd-rounds'), roundsHint: $('#gd-rounds-hint'), fresh: $('#gd-fresh'), notes: $('#gd-notes'),
+    roundsNav: $('#gd-rounds-nav'), adjustHint: $('#gd-adjust-hint'), present: $('#gd-present'),
     metaAttrs: $('#gd-meta-attrs'), metaPeople: $('#gd-meta-people'), metaRules: $('#gd-meta-rules'), metaDraw: $('#gd-meta-draw'),
   };
 
@@ -60,6 +66,7 @@
   let formScope = 'all'; // scope picked in the add-rule form
   let openScopeRule = null; // keeps a scope picker open while it re-renders
   let kept = new Set(); // group indexes frozen for a partial redraw
+  let pick = null; // person id picked up for a manual move/swap
   let idCounter = 0;
 
   // ---- Small helpers ------------------------------------------------------
@@ -96,6 +103,21 @@
   function attrById(id) { return state.attributes.find((a) => a.id === id); }
   function isInt(text) { return /^-?\d+$/.test(String(text).trim()); }
   function namedPeople() { return state.people.filter((p) => p.name.trim() !== ''); }
+  // People who take part in the draw: named and not marked absent.
+  function activePeople() { return namedPeople().filter((p) => !p.absent); }
+  function personById(id) { return state.people.find((p) => p.id === id); }
+  function personName(id) { const p = personById(id); return p ? p.name.trim() || '(no name)' : '?'; }
+  // Rules that may be marked nice-to-have. Balancing a total is always
+  // nice-to-have; size and keep-together rules are always "must".
+  function canBeSoft(rule) {
+    if (rule.type === 'pair') return rule.mode === 'apart';
+    if (rule.type === 'even') return rule.by !== 'sum';
+    return !!SOFTABLE[rule.type];
+  }
+  function withSoft(rule, src) {
+    if (src && src.soft === true && canBeSoft(rule)) rule.soft = true;
+    return rule;
+  }
   function groupWord(groups) { return String((groups && groups.label) || '').trim() || 'Group'; }
   function groupLabel(g) { return (state.groups.names[g] || '').trim() || `${groupWord(state.groups)} ${g + 1}`; }
   function reduceMotion() {
@@ -174,7 +196,9 @@
         const v = p.values ? p.values[a.id] : null;
         values[a.id] = cleanValue(a, v);
       });
-      people.push({ id, name: p.name, values });
+      const person = { id, name: p.name, values };
+      if (p.absent === true) person.absent = true;
+      people.push(person);
     }
     const groups = obj.groups && typeof obj.groups === 'object' ? obj.groups : {};
     const count = Math.min(50, Math.max(2, parseInt(groups.count, 10) || 2));
@@ -183,8 +207,8 @@
     const rules = [];
     for (const r of obj.rules) {
       if (!r || !RULE_LABEL[r.type]) return fail('A rule has an unknown type.');
-      const rule = cleanRule(r, attributes, count);
-      if (!rule) return fail(`A ${r.type} rule refers to a missing or unsuitable attribute.`);
+      const rule = cleanRule(r, attributes, count, people);
+      if (!rule) return fail(`A ${r.type} rule refers to a missing or unsuitable attribute, person or group.`);
       rules.push(rule);
     }
     const options = obj.options && typeof obj.options === 'object' ? obj.options : {};
@@ -241,15 +265,30 @@
     return ruleConds(rule).map((c) => `${c.attrId}|${c.value}`).sort().join('&');
   }
 
-  function cleanRule(r, attributes, count) {
+  function cleanRule(r, attributes, count, people) {
     const scope = cleanScope(r.scope, count);
     if (scope === null) return null;
     const rule = { id: typeof r.id === 'string' && r.id ? r.id : uid('r'), type: r.type };
     if (r.type === 'size') return Object.assign(rule, { scope, min: num(r.min), max: num(r.max) });
+    if (r.type === 'pin') {
+      const g = isInt(r.group) ? parseInt(r.group, 10) : -1;
+      if (!(people || []).some((p) => p.id === r.personId) || g < 0 || g >= count) return null;
+      return withSoft(Object.assign(rule, { personId: r.personId, group: g }), r);
+    }
+    if (r.type === 'pair') {
+      const ids = (Array.isArray(r.people) ? r.people : [])
+        .filter((id, i, arr) => arr.indexOf(id) === i && (people || []).some((p) => p.id === id));
+      if (ids.length < 2 || (r.mode !== 'apart' && r.mode !== 'together')) return null;
+      return withSoft(Object.assign(rule, { mode: r.mode, people: ids }), r);
+    }
     const attr = attributes.find((a) => a.id === r.attrId);
-    if (!attr || (attr.kind === 'label' && r.type !== 'count')) return null;
+    if (!attr) return null;
     rule.attrId = attr.id;
-    if (r.type === 'sum') return attr.kind === 'integer' ? Object.assign(rule, { scope, min: num(r.min), max: num(r.max) }) : null;
+    if (r.type === 'sum') return attr.kind === 'integer' ? withSoft(Object.assign(rule, { scope, min: num(r.min), max: num(r.max) }), r) : null;
+    if (r.type === 'even') {
+      if (r.by === 'sum' && attr.kind !== 'integer') return null;
+      return withSoft(Object.assign(rule, { by: r.by === 'sum' ? 'sum' : 'value' }), r);
+    }
     if (r.type === 'count') {
       const value = cleanValue(attr, r.value);
       if (value === null || (attr.kind === 'label' && !value.trim())) return null;
@@ -267,9 +306,9 @@
         }
         rule.and = and;
       }
-      return rule;
+      return withSoft(rule, r);
     }
-    if (r.type === 'apart') return Object.assign(rule, { scope: 'all', k: Math.max(1, num(r.k) || 1) });
+    if (r.type === 'apart') return withSoft(Object.assign(rule, { scope: 'all', k: Math.max(1, num(r.k) || 1) }), r);
     const values = Array.isArray(r.values) ? r.values.map((v) => cleanValue(attr, v)).filter((v) => v !== null) : [];
     return Object.assign(rule, { scope: 'all', values });
   }
@@ -310,7 +349,7 @@
   }
 
   function renderMeta() {
-    const named = namedPeople().length;
+    const named = activePeople().length;
     els.metaAttrs.textContent = state.attributes.length ? plural(state.attributes.length, 'attribute') : 'optional';
     els.metaPeople.textContent = plural(named, 'person', 'people');
     els.metaRules.textContent = `${plural(state.groups.count, 'group')} · ${plural(state.rules.length, 'rule')}`;
@@ -487,7 +526,11 @@
     const tbody = els.table.tBodies[0];
     thead.innerHTML = '';
     tbody.innerHTML = '';
-    const head = el('tr', {}, [el('th', { scope: 'col', class: 'gd-col-num', text: '#' }), el('th', { scope: 'col', text: 'Name' })]);
+    const head = el('tr', {}, [
+      el('th', { scope: 'col', class: 'gd-col-num', text: '#' }),
+      el('th', { scope: 'col', class: 'gd-col-here', text: 'Here', title: 'Untick people who are away — they stay in the list but skip the draw' }),
+      el('th', { scope: 'col', text: 'Name' }),
+    ]);
     state.attributes.forEach((a) => head.appendChild(el('th', { scope: 'col', text: a.name })));
     head.appendChild(el('th', { scope: 'col', class: 'gd-col-del' }, [el('span', { class: 'sr-only', text: 'Delete' })]));
     thead.appendChild(head);
@@ -497,12 +540,17 @@
     els.tableWrap.hidden = state.people.length === 0;
     els.peopleEmpty.hidden = state.people.length > 0;
     els.peopleClear.hidden = state.people.length === 0;
+    els.peoplePresent.hidden = !state.people.some((p) => p.absent);
     flagDuplicates();
   }
 
   function personRow(p, i) {
-    const tr = el('tr', { dataset: { personId: p.id } });
+    const tr = el('tr', { class: p.absent ? 'is-absent' : '', dataset: { personId: p.id } });
     tr.appendChild(el('td', { class: 'gd-col-num', text: String(i + 1) }));
+    tr.appendChild(el('td', { class: 'gd-col-here' }, [el('input', {
+      type: 'checkbox', class: 'gd-here', checked: !p.absent,
+      'aria-label': `${p.name.trim() || `Row ${i + 1}`} is here`, dataset: { field: 'present' },
+    })]));
     tr.appendChild(el('td', {}, [el('input', {
       type: 'text', class: 'form-control form-control-sm gd-cell', value: p.name, autocomplete: 'off',
       'aria-label': `Name, row ${i + 1}`, dataset: { field: 'name' },
@@ -558,9 +606,14 @@
     const tr = input.closest('tr');
     const p = state.people.find((x) => x.id === tr.dataset.personId);
     if (!p) return;
-    if (field === 'name') {
+    if (field === 'present') {
+      if (input.checked) delete p.absent; else p.absent = true;
+      tr.classList.toggle('is-absent', !!p.absent);
+      els.peoplePresent.hidden = !state.people.some((x) => x.absent);
+    } else if (field === 'name') {
       p.name = input.value;
       flagDuplicates();
+      if (state.rules.some((r) => r.type === 'pin' || r.type === 'pair')) renderRules();
     } else {
       const a = attrById(field);
       const raw = input.value.trim();
@@ -582,13 +635,33 @@
     if (!btn) return;
     const id = btn.closest('tr').dataset.personId;
     state.people = state.people.filter((p) => p.id !== id);
+    changed({ table: true, rules: prunePersonRules() });
+  });
+
+  // Person rules (pin / pair) go when the people they name are deleted.
+  function prunePersonRules() {
+    const ids = {};
+    state.people.forEach((p) => { ids[p.id] = true; });
+    const before = state.rules.length;
+    state.rules = state.rules.filter((r) => {
+      if (r.type === 'pin') return !!ids[r.personId];
+      if (r.type === 'pair') { r.people = r.people.filter((id) => ids[id]); return r.people.length >= 2; }
+      return true;
+    });
+    const removed = before - state.rules.length;
+    if (removed) notice(els.rulesNotice, `Removed ${plural(removed, 'rule')} about people who are no longer in the list.`);
+    return removed > 0;
+  }
+
+  els.peoplePresent.addEventListener('click', () => {
+    state.people.forEach((p) => { delete p.absent; });
     changed({ table: true });
   });
 
   els.peopleClear.addEventListener('click', () => {
     if (!window.confirm(`Remove all ${plural(state.people.length, 'person', 'people')}? Attributes and rules are kept.`)) return;
     state.people = [];
-    changed({ table: true });
+    changed({ table: true, rules: prunePersonRules() });
   });
 
   els.addPerson.addEventListener('click', () => {
@@ -605,9 +678,10 @@
   });
 
   function renderPeopleMeta() {
-    const people = namedPeople();
+    const people = activePeople();
     const n = people.length;
-    els.peopleCount.textContent = plural(n, 'person', 'people') +
+    const away = namedPeople().length - n;
+    els.peopleCount.textContent = plural(n, 'person', 'people') + (away ? ` · ${away} away` : '') +
       (n > SOFT_LIMIT ? ` — large lists (over ${SOFT_LIMIT}) may take a moment to draw` : '');
     const parts = [];
     state.attributes.filter((a) => a.kind === 'category').forEach((a) => {
@@ -783,6 +857,7 @@
     });
     const fresh = res.people.slice(0, HARD_LIMIT).map((p) => ({ id: uid('p'), name: p.name, values: p.values }));
     state.people = plan.replace ? fresh : state.people.concat(fresh);
+    if (plan.replace) prunePersonRules();
     closePaste();
     els.pasteText.value = '';
     notice(els.ioNotice, `Imported ${plural(fresh.length, 'person', 'people')}.`);
@@ -849,6 +924,7 @@
     state.groups.names = state.groups.names.slice(0, n);
     const before = state.rules.length;
     state.rules = state.rules.filter((r) => {
+      if (r.type === 'pin') return r.group < n;
       const list = scopeGroups(r.scope);
       if (!list) return true;
       const left = list.filter((g) => g < n);
@@ -873,9 +949,8 @@
 
   function ruleAttrs(type) {
     if (type === 'sum') return state.attributes.filter((a) => a.kind === 'integer');
-    if (type === 'size') return [];
-    if (type === 'count') return state.attributes;
-    return state.attributes.filter((a) => a.kind !== 'label');
+    if (type === 'size' || type === 'pin' || type === 'pair') return [];
+    return state.attributes;
   }
 
   function scopeSummary(scope) {
@@ -933,6 +1008,42 @@
     const picker = scopePicker(formScope, 'Rule applies to', (v) => { formScope = v; });
     if (open) picker.open = true;
     els.ruleScope.appendChild(picker);
+    const prevGroup = els.ruleGroup.value;
+    els.ruleGroup.innerHTML = '';
+    for (let g = 0; g < count; g++) els.ruleGroup.appendChild(el('option', { value: String(g), text: groupLabel(g) }));
+    if (prevGroup !== '' && parseInt(prevGroup, 10) < count) els.ruleGroup.value = prevGroup;
+  }
+
+  // Person pickers of the pin / pair rule form. Duplicate names get their row number.
+  function renderPersonOptions() {
+    const people = namedPeople();
+    const seen = {};
+    people.forEach((p) => { const k = p.name.trim().toLowerCase(); seen[k] = (seen[k] || 0) + 1; });
+    [els.rulePerson, els.rulePerson2].forEach((sel, which) => {
+      const prev = sel.value;
+      sel.innerHTML = '';
+      people.forEach((p) => {
+        const dup = seen[p.name.trim().toLowerCase()] > 1;
+        sel.appendChild(el('option', { value: p.id, text: p.name.trim() + (dup ? ` (row ${state.people.indexOf(p) + 1})` : '') }));
+      });
+      if (people.some((p) => p.id === prev)) sel.value = prev;
+      else if (which === 1 && people.length > 1) sel.value = people[1].id;
+    });
+  }
+
+  function syncSoftField() {
+    const type = els.ruleType.value;
+    const a = attrById(els.ruleAttr.value);
+    const sumOk = !!a && a.kind === 'integer';
+    els.ruleBy.options[1].disabled = !sumOk;
+    if (!sumOk) els.ruleBy.value = 'value';
+    const forcedSoft = type === 'even' && els.ruleBy.value === 'sum';
+    const forcedMust = type === 'pair' && els.ruleMode.value === 'together';
+    // A forced priority is shown but not kept once the choice is free again.
+    if (els.ruleSoft.disabled && !forcedSoft && !forcedMust) els.ruleSoft.value = 'must';
+    els.ruleSoft.disabled = forcedSoft || forcedMust;
+    if (forcedSoft) els.ruleSoft.value = 'soft';
+    if (forcedMust) els.ruleSoft.value = 'must';
   }
 
   function renderRuleForm() {
@@ -955,6 +1066,9 @@
     sum: 'Bounds on the total of a number within a group.',
     apart: 'No more than this many people sharing a value in one group (1 = all different).',
     together: 'Everyone sharing a value lands in the same group.',
+    even: 'Every group gets its fair share of each value — the limits are worked out from the people, so they stay right when the list changes. For a number you can balance the total instead (always nice-to-have).',
+    pin: 'This person always lands in the chosen group.',
+    pair: 'These two always share a group — or never do.',
   };
 
   // Distinct non-empty values of a label attribute, verbatim (rules match exact text).
@@ -982,9 +1096,12 @@
   // Called on every change so label values track the people table.
   function renderValueField() {
     const type = els.ruleType.value;
-    const a = type === 'size' ? null : attrById(els.ruleAttr.value);
+    const personRule = type === 'pin' || type === 'pair';
+    const a = type === 'size' || personRule ? null : attrById(els.ruleAttr.value);
     const isNum = !!a && a.kind === 'integer';
     const prev = els.ruleValue.value;
+    if (personRule) renderPersonOptions();
+    syncSoftField();
     els.ruleValue.hidden = isNum;
     els.ruleValueNum.hidden = !isNum;
     els.ruleValue.innerHTML = '';
@@ -992,19 +1109,20 @@
     values.forEach((o) => els.ruleValue.appendChild(el('option', { value: o, text: o })));
     if (values.indexOf(prev) !== -1) els.ruleValue.value = prev;
     const noLabels = type === 'count' && !!a && a.kind === 'label' && !values.length;
-    const missing = type !== 'size' && !ruleAttrs(type).length;
+    const needPeople = type === 'pin' ? 1 : (type === 'pair' ? 2 : 0);
+    const missing = personRule ? namedPeople().length < needPeople : (type !== 'size' && !ruleAttrs(type).length);
     if (noLabels) els.ruleValue.appendChild(el('option', { value: '', text: 'No values yet' }));
     els.ruleValue.disabled = noLabels;
     els.ruleAdd.disabled = missing || noLabels;
     refreshAndRows();
     if (missing) {
       els.ruleHelp.textContent = type === 'sum' ? 'Add a number attribute first.'
-        : type === 'count' ? 'Add an attribute first.'
-          : 'Add a category or number attribute first (labels work in count rules only).';
+        : personRule ? `Add ${needPeople === 1 ? 'a person' : 'at least two people'} first (step 2).`
+          : 'Add an attribute first.';
     } else if (noLabels) {
       els.ruleHelp.textContent = `No ${a.name} values yet — add people first.`;
-    } else if (type === 'count' && a && a.kind === 'label') {
-      els.ruleHelp.textContent = `${RULE_HELP.count} Labels match exact text${lookAlikes(values) ? ' — some values differ only by case or spaces' : ''}.`;
+    } else if (a && a.kind === 'label' && type !== 'sum') {
+      els.ruleHelp.textContent = `${RULE_HELP[type]} Labels match exact text${lookAlikes(labelValues(a)) ? ' — some values differ only by case or spaces' : ''}.`;
     } else {
       els.ruleHelp.textContent = RULE_HELP[type];
     }
@@ -1084,6 +1202,8 @@
 
   els.ruleType.addEventListener('change', () => { els.ruleError.textContent = ''; renderRuleForm(); });
   els.ruleAttr.addEventListener('change', renderValueField);
+  els.ruleBy.addEventListener('change', syncSoftField);
+  els.ruleMode.addEventListener('change', syncSoftField);
 
   els.ruleForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1092,10 +1212,24 @@
     const rule = { id: uid('r'), type };
     const minRaw = els.ruleMin.value.trim();
     const maxRaw = els.ruleMax.value.trim();
-    if (type !== 'size') {
+    if (type === 'pin') {
+      const p = personById(els.rulePerson.value);
+      if (!p) return fail('Pick a person.');
+      if (state.rules.some((r) => r.type === 'pin' && r.personId === p.id)) return fail(`${p.name.trim()} is already pinned — delete that rule first.`);
+      rule.personId = p.id;
+      rule.group = Math.min(state.groups.count - 1, Math.max(0, parseInt(els.ruleGroup.value, 10) || 0));
+    } else if (type === 'pair') {
+      const p1 = personById(els.rulePerson.value);
+      const p2 = personById(els.rulePerson2.value);
+      if (!p1 || !p2) return fail('Pick two people.');
+      if (p1 === p2) return fail('Pick two different people.');
+      rule.mode = els.ruleMode.value === 'apart' ? 'apart' : 'together';
+      rule.people = [p1.id, p2.id];
+    } else if (type !== 'size') {
       const a = attrById(els.ruleAttr.value);
       if (!a) return fail('Pick an attribute.');
       rule.attrId = a.id;
+      if (type === 'even') rule.by = els.ruleBy.value === 'sum' && a.kind === 'integer' ? 'sum' : 'value';
       if (type === 'count') {
         if (a.kind === 'integer') {
           if (!isInt(els.ruleValueNum.value)) return fail('Enter a whole-number value.');
@@ -1149,19 +1283,21 @@
       if (rule.min !== null && rule.max !== null && rule.min > rule.max) return fail('Min is larger than max.');
       rule.scope = formScope;
     }
+    if (els.ruleSoft.value === 'soft' && canBeSoft(rule)) rule.soft = true;
     fail('');
     state.rules.push(rule);
     els.ruleMin.value = '';
     els.ruleMax.value = '';
     els.ruleValues.value = '';
     els.ruleAndRows.innerHTML = '';
+    els.ruleSoft.value = 'must'; // each new rule starts as a must
     refreshAndRows();
     notice(els.rulesNotice, '');
     changed({ rules: true, groups: type === 'size' });
   });
 
   function overrides(rule) {
-    if (!scopeGroups(rule.scope) || rule.type === 'apart' || rule.type === 'together') return false;
+    if (!scopeGroups(rule.scope) || ['size', 'count', 'sum'].indexOf(rule.type) === -1) return false;
     return state.rules.some((r) => r !== rule && r.type === rule.type && r.scope === 'all' &&
       (rule.type === 'size' || (rule.type === 'count' ? condsKey(r) === condsKey(rule)
         : r.attrId === rule.attrId)));
@@ -1174,6 +1310,9 @@
       case 'count': return ruleConds(rule).map((c) => `${attrById(c.attrId).name} = ${c.value}`).join(' and ');
       case 'sum': return `Sum of ${a.name}`;
       case 'apart': return `Keep apart by ${a.name}`;
+      case 'even': return rule.by === 'sum' ? `Balance the total of ${a.name}` : `Spread ${a.name} evenly`;
+      case 'pin': return `${personName(rule.personId)} → ${groupLabel(rule.group)}`;
+      case 'pair': return rule.people.map(personName).join(rule.mode === 'apart' ? ' not with ' : ' with ');
       default: return `Keep together by ${a.name}${rule.values && rule.values.length ? ` (${rule.values.join(', ')})` : ''}`;
     }
   }
@@ -1217,6 +1356,12 @@
       const fields = el('span', { class: 'gd-rule-fields' });
       if (rule.type === 'apart') {
         fields.appendChild(numInput(rule, 'k', 'at most'));
+      } else if (rule.type === 'even') {
+        fields.appendChild(el('span', { class: 'gd-rule-note muted', text: rule.by === 'sum' ? 'totals as equal as possible' : 'fair share per group' }));
+      } else if (rule.type === 'pin') {
+        fields.appendChild(el('span', { class: 'gd-rule-note muted', text: 'always in this group' }));
+      } else if (rule.type === 'pair') {
+        fields.appendChild(el('span', { class: 'gd-rule-note muted', text: rule.mode === 'apart' ? 'different groups' : 'same group' }));
       } else if (rule.type !== 'together') {
         fields.appendChild(numInput(rule, 'min', 'min'));
         fields.appendChild(numInput(rule, 'max', 'max'));
@@ -1228,6 +1373,18 @@
       } else {
         fields.appendChild(el('span', { class: 'gd-rule-note muted', text: 'same group' }));
       }
+      if (canBeSoft(rule)) {
+        const box = el('input', { type: 'checkbox', checked: !!rule.soft, 'aria-label': `${ruleTarget(rule)} is nice to have` });
+        box.addEventListener('change', () => {
+          if (box.checked) rule.soft = true; else delete rule.soft;
+          li.classList.toggle('is-soft', !!rule.soft);
+          changed();
+        });
+        fields.appendChild(el('label', { class: 'gd-check gd-rule-soft', title: 'Nice to have: met as closely as possible, never blocks a draw' }, [box, el('span', { text: 'nice to have' })]));
+      } else if (rule.type === 'even') {
+        fields.appendChild(el('span', { class: 'gd-badge', text: 'nice to have' }));
+      }
+      li.classList.toggle('is-soft', !!rule.soft || (rule.type === 'even' && rule.by === 'sum'));
       li.appendChild(fields);
       const del = el('button', { type: 'button', class: 'btn btn-link btn-remove gd-rule-delete', 'aria-label': `Delete rule ${ruleTarget(rule)}`, text: '×' });
       del.addEventListener('click', () => {
@@ -1263,7 +1420,7 @@
 const S = (${Solver.createSolver.toString()})(randomIndex);
 self.onmessage = function (e) {
   var result;
-  try { result = S.run(e.data.setup); } catch (err) { result = { status: 'error', message: String((err && err.message) || err) }; }
+  try { result = S.run(e.data.setup, e.data.opts); } catch (err) { result = { status: 'error', message: String((err && err.message) || err) }; }
   self.postMessage({ seq: e.data.seq, result: result });
 };`;
       const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
@@ -1275,7 +1432,7 @@ self.onmessage = function (e) {
         if (e && e.preventDefault) e.preventDefault();
         workerBroken = true;
         stopWorker();
-        if (running && !running.done) running.resolve(Solver.run(running.setup));
+        if (running && !running.done) running.resolve(Solver.run(running.setup, running.opts));
       };
       return worker;
     } catch (e) {
@@ -1289,12 +1446,12 @@ self.onmessage = function (e) {
     worker = null;
   }
 
-  function solveAsync(seq, setup) {
+  function solveAsync(seq, setup, opts) {
     return new Promise((resolve) => {
-      running = { seq, setup, done: false, resolve: (r) => { if (!running || running.seq !== seq || running.done) return; running.done = true; resolve(r); } };
+      running = { seq, setup, opts, done: false, resolve: (r) => { if (!running || running.seq !== seq || running.done) return; running.done = true; resolve(r); } };
       const w = getWorker();
-      if (w) w.postMessage({ seq, setup });
-      else setTimeout(() => running && running.seq === seq && running.resolve(Solver.run(setup)), 30);
+      if (w) w.postMessage({ seq, setup, opts });
+      else setTimeout(() => running && running.seq === seq && running.resolve(Solver.run(setup, opts)), 30);
     });
   }
 
@@ -1316,9 +1473,13 @@ self.onmessage = function (e) {
     const ids = {};
     redraw.forEach((g) => shown.groups[g].members.forEach((p) => { ids[p.id] = true; }));
     sub.people = state.people.filter((p) => ids[p.id]);
-    sub.groups = { count: redraw.length, names: redraw.map(groupLabel) };
+    sub.groups = { count: redraw.length, label: state.groups.label, names: redraw.map(groupLabel) };
     sub.rules = [];
     state.rules.forEach((r) => {
+      if (r.type === 'pin') {
+        if (r.group in toNew) sub.rules.push(Object.assign(clone(r), { group: toNew[r.group] }));
+        return;
+      }
       const list = scopeGroups(r.scope);
       if (!list) { sub.rules.push(clone(r)); return; }
       const mapped = list.filter((g) => g in toNew).map((g) => toNew[g]);
@@ -1334,8 +1495,15 @@ self.onmessage = function (e) {
     const groups = [];
     for (let g = 0; g < shown.groups.length; g++) groups.push(shown.groups[g].members.map((p) => p.id));
     plan.redraw.forEach((g, i) => { groups[g] = result.groups[i]; });
-    const violations = Solver.evaluate(setup, groups);
-    return { status: violations.length ? 'best-effort' : 'ok', groups, violations, method: result.method };
+    return Object.assign(checked(setup, groups), { method: result.method, repeats: result.repeats });
+  }
+
+  // Re-check any split against the full setup: must-rule violations and
+  // nice-to-have notes.
+  function checked(setup, groups) {
+    const all = Solver.evaluate(setup, groups);
+    const violations = all.filter((v) => !v.soft);
+    return { status: violations.length ? 'best-effort' : 'ok', groups, violations, notes: all.filter((v) => v.soft) };
   }
 
   function renderPartial() {
@@ -1357,13 +1525,28 @@ self.onmessage = function (e) {
       ? (redraw ? `Tick the groups to keep — “Draw again” redraws the other ${redraw}.` : 'All groups are kept — untick at least one to redraw.')
       : '';
     els.draw.disabled = !!running || (on && redraw === 0);
+    els.rounds.disabled = on;
+    renderPick();
+  }
+
+  function roundsWanted() {
+    return Math.min(MAX_ROUNDS, Math.max(1, parseInt(els.rounds.value, 10) || 1));
+  }
+
+  // Earlier splits of this session (every round of every draw in the history).
+  function avoidList() {
+    const out = [];
+    history.forEach((item) => (item.series || [item]).forEach((e) => {
+      out.push(e.groups.map((g) => g.members.map((p) => p.id)));
+    }));
+    return out;
   }
 
   function draw() {
     if (running) return;
-    const n = namedPeople().length;
+    const n = activePeople().length;
     if (!n) {
-      showStatus('Add at least one person (step 2) to draw groups.');
+      showStatus(namedPeople().length ? 'Everyone is marked away — tick who is here (step 2).' : 'Add at least one person (step 2) to draw groups.');
       return;
     }
     const partial = partialActive() ? partialPlan() : null;
@@ -1372,6 +1555,8 @@ self.onmessage = function (e) {
       return;
     }
     const seq = ++drawSeq;
+    const opts = { rounds: partial ? 1 : roundsWanted() };
+    if (els.fresh.checked) opts.avoid = avoidList();
     const setup = clone(state);
     const setupVersion = version;
     const reduce = reduceMotion();
@@ -1385,14 +1570,14 @@ self.onmessage = function (e) {
       els.cancel.hidden = false;
       showStatus('Searching for a split that meets every rule…');
     }, 450);
-    solveAsync(seq, partial ? partial.sub : setup).then((result) => {
+    solveAsync(seq, partial ? partial.sub : setup, opts).then((result) => {
       clearTimeout(slowTimer);
       const wait = reduce ? 0 : Math.max(0, 600 - (Date.now() - startedAt));
-      setTimeout(() => finish(partial ? mergePartial(result, partial, setup) : result, setup, setupVersion, partial), wait);
+      setTimeout(() => finish(partial ? mergePartial(result, partial, setup) : result, setup, setupVersion, partial, opts), wait);
     });
   }
 
-  function finish(result, setup, setupVersion, partial) {
+  function finish(result, setup, setupVersion, partial, opts) {
     running = null;
     els.draw.disabled = false;
     els.draw.classList.remove('is-dealing');
@@ -1401,17 +1586,29 @@ self.onmessage = function (e) {
     els.alert.hidden = true;
     els.alert.innerHTML = '';
     if (result.status === 'ok' || result.status === 'best-effort') {
-      const entry = makeEntry(result, setup, setupVersion);
+      const o = opts || {};
+      const entries = (result.rounds || [result]).map((r) => makeEntry(r, setup, setupVersion));
+      entries.forEach((e, i) => {
+        e.avoided = i > 0 || !!(o.avoid && o.avoid.length);
+        if (entries.length > 1) { e.series = entries; e.round = i; }
+      });
+      const entry = entries[0];
       if (partial) entry.kept = partial.keptList;
       history.unshift(entry);
       history = history.slice(0, HISTORY_MAX);
+      pick = null;
+      if (!partial) kept = new Set();
       display(entry, true);
       renderHistory();
       const G = entry.groups.length;
-      const what = partial ? `Redrew ${plural(partial.redraw.length, 'group')}, kept ${partial.keptList.length}` : `Drew ${plural(G, 'group')}`;
+      const broken = entries.reduce((s, e) => s + e.violations.length, 0);
+      const what = partial ? `Redrew ${plural(partial.redraw.length, 'group')}, kept ${partial.keptList.length}`
+        : entries.length > 1 ? `Drew ${entries.length} rounds of ${plural(G, 'group')}`
+          : `Drew ${plural(G, 'group')}`;
+      const short = (o.rounds || 1) > entries.length ? ` (asked for ${o.rounds} — the rest ran out of time)` : '';
       showStatus(result.status === 'ok'
-        ? `${what}.`
-        : `${what} — best effort, ${plural(result.violations.length, 'rule violation')}.`, true);
+        ? `${what}${short}.`
+        : `${what}${short} — best effort, ${plural(broken, 'rule violation')}.`, true);
     } else {
       renderFailure(result);
     }
@@ -1484,12 +1681,14 @@ self.onmessage = function (e) {
       version: setupVersion,
       status: result.status,
       violations: result.violations || [],
+      notes: result.notes || [],
+      repeats: result.repeats || 0,
       attrs,
       ruleAttrIds,
       countTargets: setup.rules.filter((r) => r.type === 'count')
         .reduce((acc, r) => acc.concat(ruleConds(r).map((c) => ({ attrId: c.attrId, value: c.value }))), [])
         .filter((t, i, arr) => arr.findIndex((x) => x.attrId === t.attrId && String(x.value) === String(t.value)) === i),
-      sumAttrs: setup.rules.filter((r) => r.type === 'sum').map((r) => r.attrId).filter((x, i, arr) => arr.indexOf(x) === i),
+      sumAttrs: setup.rules.filter((r) => r.type === 'sum' || (r.type === 'even' && r.by === 'sum')).map((r) => r.attrId).filter((x, i, arr) => arr.indexOf(x) === i),
       groups: result.groups.map((ids, g) => ({
         name: (setup.groups.names[g] || '').trim() || `${groupWord(setup.groups)} ${g + 1}`,
         members: ids.map((id) => byId[id]).filter(Boolean),
@@ -1550,6 +1749,7 @@ self.onmessage = function (e) {
         keepBox(g, group.name),
       ]);
       card.appendChild(head);
+      card.appendChild(el('button', { type: 'button', class: 'btn btn-primary btn-sm gd-move-here', text: 'Move here', 'aria-label': `Move the picked person to ${group.name}`, dataset: { group: String(g) } }));
       const comp = composition(entry, group.members);
       if (comp) card.appendChild(el('p', { class: 'gd-comp', text: comp }));
       const ul = el('ul', { class: 'team-members gd-members' });
@@ -1579,18 +1779,63 @@ self.onmessage = function (e) {
     });
 
     els.results.dataset.drawNo = String(entry.no);
+    els.results.dataset.round = String((entry.round || 0) + 1);
     els.actions.hidden = false;
     renderPartial();
     renderViolations(entry);
+    renderNotes(entry);
+    renderRoundsNav(entry);
     markOutdated();
     renderHistoryCurrent();
+  }
+
+  // Nice-to-have rules that could not be fully met: information, not a warning.
+  function renderNotes(entry) {
+    els.notes.innerHTML = '';
+    const notes = entry.notes || [];
+    els.notes.hidden = !notes.length;
+    if (!notes.length) return;
+    els.notes.appendChild(el('p', { class: 'gd-alert-title', text: `Nice to have: ${plural(notes.length, 'wish', 'wishes')} not fully met.` }));
+    els.notes.appendChild(el('ul', { class: 'gd-notes-list' }, notes.map((v) => el('li', { text: v.message + (v.rule ? ` (${v.rule})` : '') }))));
+  }
+
+  // Round switcher of a multi-round draw + the repeat-pairings summary.
+  function renderRoundsNav(entry) {
+    const nav = els.roundsNav;
+    nav.innerHTML = '';
+    const series = entry.series;
+    nav.hidden = !series && !entry.avoided;
+    if (nav.hidden) return;
+    if (series) {
+      const tabs = el('div', { class: 'gd-round-tabs', role: 'group', 'aria-label': 'Rounds' });
+      series.forEach((e, i) => {
+        const btn = el('button', {
+          type: 'button', class: 'gd-round-btn', text: `Round ${i + 1}`, 'aria-pressed': i === entry.round ? 'true' : 'false',
+          dataset: { round: String(i + 1) },
+        });
+        btn.addEventListener('click', () => {
+          if (shown === series[i]) return;
+          pick = null;
+          kept = new Set();
+          display(series[i], false);
+          showStatus(`Showing round ${i + 1} of ${series.length}.`);
+        });
+        tabs.appendChild(btn);
+      });
+      nav.appendChild(tabs);
+    }
+    if (entry.avoided) {
+      nav.appendChild(el('span', { class: 'gd-round-info', text: entry.repeats
+        ? `${plural(entry.repeats, 'pair')} here already met in an earlier ${series ? 'round' : 'draw'}`
+        : `Nobody here has met before ${series ? 'in an earlier round' : 'in an earlier draw'} 🎉` }));
+    }
   }
 
   function renderViolations(entry) {
     els.alert.innerHTML = '';
     if (entry.status !== 'best-effort') { els.alert.hidden = true; return; }
     els.alert.className = 'gd-alert is-warning';
-    els.alert.appendChild(el('p', { class: 'gd-alert-title', text: `Best effort: ${plural(entry.violations.length, 'rule is', 'rules are')} not met.` }));
+    els.alert.appendChild(el('p', { class: 'gd-alert-title', text: `${entry.edited ? 'After your changes' : 'Best effort'}: ${plural(entry.violations.length, 'rule is', 'rules are')} not met.` }));
     els.alert.appendChild(el('ul', { class: 'gd-violations' }, entry.violations.map((v) => el('li', { text: v.message + (v.rule ? ` (${v.rule})` : '') }))));
     els.alert.hidden = false;
   }
@@ -1603,10 +1848,14 @@ self.onmessage = function (e) {
         el('span', { class: 'gd-history-no', text: `#${entry.no}` }),
         el('span', { text: `${plural(entry.groups.length, 'group')} · ${time}` }),
         entry.kept && entry.kept.length ? el('span', { class: 'gd-badge', text: `${entry.kept.length} kept` }) : null,
+        entry.series ? el('span', { class: 'gd-badge', text: `${entry.series.length} rounds` }) : null,
+        (entry.series || [entry]).some((e) => e.edited) ? el('span', { class: 'gd-badge', text: 'edited' }) : null,
         entry.status === 'best-effort' ? el('span', { class: 'gd-badge is-warning', text: 'best effort' }) : null,
       ]);
       btn.addEventListener('click', () => {
-        display(entry, false);
+        pick = null;
+        kept = new Set();
+        display(entry.series ? entry.series[0] : entry, false);
         showStatus(`Showing draw #${entry.no}.`);
       });
       els.history.appendChild(el('li', {}, [btn]));
@@ -1631,10 +1880,337 @@ self.onmessage = function (e) {
   });
   els.showAttrs.addEventListener('change', () => { if (shown) display(shown, false); });
 
+  // ---- Rounds & repeat pairings ------------------------------------------------
+
+  els.rounds.addEventListener('change', () => {
+    els.rounds.value = String(roundsWanted());
+    els.roundsHint.hidden = roundsWanted() < 2;
+  });
+
+  // ---- Manual adjust: tap a name, then another name (swap) or a group (move) ----
+
+  function canAdjust() {
+    return !!shown && shown.version === version && shown.groups.length > 1 && !running;
+  }
+
+  function findMember(id) {
+    for (let g = 0; g < shown.groups.length; g++) {
+      const p = shown.groups[g].members.find((x) => x.id === id);
+      if (p) return { g, p };
+    }
+    return null;
+  }
+
+  function renderPick() {
+    const ok = canAdjust();
+    if (!ok || (pick && !findMember(pick))) pick = null;
+    const at = pick ? findMember(pick) : null;
+    els.results.classList.toggle('is-adjustable', ok);
+    els.results.classList.toggle('has-pick', !!at);
+    els.results.querySelectorAll('.gd-member').forEach((li) => {
+      const on = !!at && li.dataset.personId === pick;
+      li.classList.toggle('is-picked', on);
+      if (ok) {
+        li.setAttribute('tabindex', '0');
+        li.setAttribute('role', 'button');
+        li.setAttribute('aria-pressed', on ? 'true' : 'false');
+      } else {
+        li.removeAttribute('tabindex');
+        li.removeAttribute('role');
+        li.removeAttribute('aria-pressed');
+      }
+    });
+    els.results.querySelectorAll('.gd-card').forEach((card) => {
+      card.classList.toggle('has-picked', !!at && parseInt(card.dataset.group, 10) === at.g);
+    });
+    els.adjustHint.hidden = !ok;
+    els.adjustHint.textContent = !ok ? ''
+      : at ? `Moving ${at.p.name}: tap another name to swap, or “Move here” on a group. Tap ${at.p.name} again to cancel.`
+        : 'Not quite right? Tap a name, then another name to swap them — or a group to move.';
+  }
+
+  // Store a hand-edited split as a new result, re-checked against every rule.
+  function applyAdjust(groups, message) {
+    const setup = clone(state);
+    const from = shown;
+    const entry = makeEntry(checked(setup, groups), setup, version);
+    entry.edited = true;
+    entry.avoided = false;
+    if (from.series) {
+      // A round of a multi-round draw is replaced in place.
+      entry.no = from.no;
+      entry.series = from.series;
+      entry.round = from.round;
+      from.series[from.round] = entry;
+      const at = history.indexOf(from);
+      if (at !== -1) history[at] = entry;
+    } else {
+      drawSeq += 1;
+      entry.no = drawSeq;
+      history.unshift(entry);
+      history = history.slice(0, HISTORY_MAX);
+    }
+    pick = null;
+    display(entry, false);
+    renderHistory();
+    renderMeta();
+    showStatus(entry.violations.length ? `${message} ${plural(entry.violations.length, 'rule is', 'rules are')} now broken.` : message);
+  }
+
+  function idGroups() {
+    return shown.groups.map((g) => g.members.map((p) => p.id));
+  }
+
+  function onMemberPick(id) {
+    if (!canAdjust()) return;
+    const hit = findMember(id);
+    if (!hit) return;
+    const from = pick ? findMember(pick) : null;
+    if (!from) { pick = id; renderPick(); return; }
+    if (pick === id) { pick = null; renderPick(); return; }
+    if (from.g === hit.g) { pick = id; renderPick(); return; } // same group: just pick the other one
+    const groups = idGroups();
+    groups[from.g][groups[from.g].indexOf(pick)] = id;
+    groups[hit.g][groups[hit.g].indexOf(id)] = pick;
+    applyAdjust(groups, `Swapped ${from.p.name} and ${hit.p.name}.`);
+  }
+
+  function onMoveHere(g) {
+    if (!canAdjust() || !pick) return;
+    const from = findMember(pick);
+    if (!from || from.g === g) return;
+    const groups = idGroups();
+    groups[from.g] = groups[from.g].filter((id) => id !== pick);
+    groups[g].push(pick);
+    applyAdjust(groups, `Moved ${from.p.name} to ${shown.groups[g].name}.`);
+  }
+
+  els.results.addEventListener('click', (e) => {
+    const move = e.target.closest('.gd-move-here');
+    if (move) { onMoveHere(parseInt(move.dataset.group, 10)); return; }
+    const li = e.target.closest('.gd-member');
+    if (li && li.dataset.personId) onMemberPick(li.dataset.personId);
+  });
+  els.results.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const li = e.target.closest && e.target.closest('.gd-member');
+    if (!li || e.target !== li) return;
+    e.preventDefault();
+    onMemberPick(li.dataset.personId);
+    const again = els.results.querySelector(`.gd-member[data-person-id="${CSS.escape(li.dataset.personId)}"]`);
+    if (again) again.focus();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && pick && !present) { pick = null; renderPick(); }
+  });
+
+  // ---- Presenter mode: full-screen, click-to-reveal ----------------------------
+  // Purely a way of showing a finished draw: nothing random happens here.
+
+  let present = null; // { root, entry, units, done, lastFocus, … }
+
+  function presenterUnits(entry, mode) {
+    const units = [];
+    entry.groups.forEach((group, g) => {
+      if (!group.members.length) return;
+      if (mode === 'group') units.push({ g, members: group.members });
+      else group.members.forEach((p) => units.push({ g, members: [p] }));
+    });
+    return units;
+  }
+
+  function closePresenter() {
+    if (!present) return;
+    const p = present;
+    present = null;
+    document.removeEventListener('keydown', p.onKey, true);
+    if (document.fullscreenElement && document.exitFullscreen) {
+      try { const r = document.exitFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* not in fullscreen */ }
+    }
+    p.root.remove();
+    document.body.classList.remove('gd-presenting');
+    if (p.lastFocus && p.lastFocus.focus) p.lastFocus.focus();
+  }
+
+  function confetti(root) {
+    if (reduceMotion()) return;
+    const layer = el('div', { class: 'gd-confetti', 'aria-hidden': 'true' });
+    for (let i = 0; i < 70; i++) {
+      // Cosmetic jitter only — the draw is long finished.
+      const bit = el('span', { class: 'gd-confetti-bit' });
+      bit.style.left = (Math.random() * 100).toFixed(1) + '%';
+      bit.style.background = PALETTE[i % PALETTE.length];
+      bit.style.animationDelay = (Math.random() * 0.6).toFixed(2) + 's';
+      bit.style.animationDuration = (2.2 + Math.random() * 1.6).toFixed(2) + 's';
+      bit.style.setProperty('--gd-spin', Math.round(360 + Math.random() * 720) + 'deg');
+      layer.appendChild(bit);
+    }
+    root.appendChild(layer);
+    setTimeout(() => layer.remove(), 4600);
+  }
+
+  function openPresenter() {
+    if (!shown || present) return;
+    const entry = shown;
+    const total = entry.groups.reduce((s, g) => s + g.members.length, 0);
+    const title = el('h2', { class: 'gd-present-title', text: entry.series ? `Round ${entry.round + 1} of ${entry.series.length}` : 'The draw' });
+    const mode = el('select', { class: 'form-control form-control-sm gd-present-mode', 'aria-label': 'Reveal' }, [
+      el('option', { value: 'name', text: 'Name by name' }),
+      el('option', { value: 'group', text: 'Group by group' }),
+    ]);
+    const next = el('button', { type: 'button', class: 'btn btn-primary gd-present-next', text: 'Reveal next' });
+    const all = el('button', { type: 'button', class: 'btn btn-outline-secondary btn-sm gd-present-all', text: 'Reveal all' });
+    const full = el('button', { type: 'button', class: 'btn btn-outline-secondary btn-sm gd-present-full', text: 'Full screen' });
+    const close = el('button', { type: 'button', class: 'btn btn-outline-secondary btn-sm gd-present-close', 'aria-label': 'Close presenter', text: '✕ Close' });
+    const progress = el('span', { class: 'gd-present-progress' });
+    const spot = el('div', { class: 'gd-present-spot' });
+    const live = el('p', { class: 'gd-present-live', 'aria-live': 'polite' });
+    const grid = el('div', { class: 'gd-present-grid' });
+    const root = el('div', { class: 'gd-present', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Present the draw' }, [
+      el('div', { class: 'gd-present-bar' }, [title, progress, el('div', { class: 'gd-present-controls' }, [mode, next, all, full, close])]),
+      spot, grid, live,
+    ]);
+    const slots = {};
+    const counts = [];
+    entry.groups.forEach((group, g) => {
+      const ul = el('ul', { class: 'gd-present-members' });
+      group.members.forEach((p) => {
+        const li = el('li', { class: 'gd-present-slot', dataset: { personId: p.id } }, [el('span', { class: 'gd-present-name', text: '?' })]);
+        slots[p.id] = li;
+        ul.appendChild(li);
+      });
+      if (!group.members.length) ul.appendChild(el('li', { class: 'gd-present-slot is-shown is-nobody', text: 'Nobody' }));
+      const count = el('span', { class: 'gd-present-count', text: `0 / ${group.members.length}` });
+      counts.push(count);
+      const card = el('section', { class: 'gd-present-card', dataset: { group: String(g) } }, [
+        el('div', { class: 'gd-present-card-head' }, [el('h3', { text: group.name }), count]), ul,
+      ]);
+      card.style.setProperty('--team-color', PALETTE[g % PALETTE.length]);
+      grid.appendChild(card);
+    });
+
+    const p = { root, entry, units: presenterUnits(entry, 'name'), done: 0, revealed: 0, lastFocus: document.activeElement };
+    const perGroup = entry.groups.map(() => 0);
+
+    function paint() {
+      const finished = p.done >= p.units.length;
+      progress.textContent = `${p.revealed} / ${total} revealed`;
+      next.disabled = finished;
+      all.disabled = finished;
+      next.textContent = finished ? 'All revealed' : (p.done ? 'Reveal next' : 'Start the reveal');
+      root.classList.toggle('is-finished', finished);
+    }
+    function revealUnit(unit, quiet) {
+      const reduce = reduceMotion();
+      unit.members.forEach((person) => {
+        const li = slots[person.id];
+        li.querySelector('.gd-present-name').textContent = person.name;
+        li.classList.add('is-shown');
+        if (!reduce && !quiet) li.classList.add('is-popping');
+        p.revealed += 1;
+        perGroup[unit.g] += 1;
+      });
+      counts[unit.g].textContent = `${perGroup[unit.g]} / ${entry.groups[unit.g].members.length}`;
+      const card = grid.children[unit.g];
+      card.classList.toggle('is-complete', perGroup[unit.g] === entry.groups[unit.g].members.length);
+      if (quiet) return;
+      const name = entry.groups[unit.g].name;
+      spot.innerHTML = '';
+      spot.style.setProperty('--team-color', PALETTE[unit.g % PALETTE.length]);
+      if (unit.members.length === 1) {
+        spot.appendChild(el('span', { class: 'gd-present-spot-name', text: unit.members[0].name }));
+        spot.appendChild(el('span', { class: 'gd-present-spot-group', text: `→ ${name}` }));
+        live.textContent = `${unit.members[0].name} joins ${name}.`;
+      } else {
+        spot.appendChild(el('span', { class: 'gd-present-spot-name', text: name }));
+        spot.appendChild(el('span', { class: 'gd-present-spot-group', text: unit.members.map((x) => x.name).join(', ') }));
+        live.textContent = `${name}: ${unit.members.map((x) => x.name).join(', ')}.`;
+      }
+      if (!reduce) { spot.classList.remove('is-fresh'); void spot.offsetWidth; spot.classList.add('is-fresh'); }
+      if (card.scrollIntoView) card.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    }
+    function finale() {
+      spot.innerHTML = '';
+      spot.style.removeProperty('--team-color');
+      spot.appendChild(el('span', { class: 'gd-present-spot-name', text: 'That’s everyone! 🎉' }));
+      live.textContent = 'Everyone is revealed.';
+      confetti(root);
+    }
+    function step() {
+      if (p.done >= p.units.length) return;
+      revealUnit(p.units[p.done], false);
+      p.done += 1;
+      if (p.done >= p.units.length) finale();
+      paint();
+    }
+    function revealAll() {
+      if (p.done >= p.units.length) return;
+      while (p.done < p.units.length) { revealUnit(p.units[p.done], true); p.done += 1; }
+      finale();
+      paint();
+    }
+    function restart() {
+      p.units = presenterUnits(entry, mode.value);
+      p.done = 0;
+      p.revealed = 0;
+      perGroup.fill(0);
+      Object.keys(slots).forEach((id) => {
+        slots[id].classList.remove('is-shown', 'is-popping');
+        slots[id].querySelector('.gd-present-name').textContent = '?';
+      });
+      Array.from(grid.children).forEach((card, g) => {
+        card.classList.remove('is-complete');
+        counts[g].textContent = `0 / ${entry.groups[g].members.length}`;
+      });
+      spot.innerHTML = '';
+      spot.appendChild(el('span', { class: 'gd-present-spot-hint', text: 'Ready? Press “Start the reveal” (or Space / →).' }));
+      paint();
+    }
+    p.onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePresenter(); return; }
+      if (e.key === 'Tab') {
+        const items = Array.from(root.querySelectorAll('button, select')).filter((x) => !x.disabled && x.offsetParent !== null);
+        if (!items.length) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (!root.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+        else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        return;
+      }
+      const tag = e.target && e.target.tagName;
+      if (e.key === 'ArrowRight' && tag !== 'SELECT') { e.preventDefault(); step(); }
+      else if ((e.key === ' ' || e.key === 'Enter') && tag !== 'SELECT' && tag !== 'BUTTON') { e.preventDefault(); step(); }
+    };
+    next.addEventListener('click', step);
+    all.addEventListener('click', revealAll);
+    close.addEventListener('click', closePresenter);
+    mode.addEventListener('change', restart);
+    if (root.requestFullscreen) {
+      full.addEventListener('click', () => {
+        try {
+          const r = document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen();
+          if (r && r.catch) r.catch(() => {});
+        } catch (e) { /* fullscreen not allowed here */ }
+      });
+    } else full.hidden = true;
+
+    present = p;
+    document.body.appendChild(root);
+    document.body.classList.add('gd-presenting');
+    document.addEventListener('keydown', p.onKey, true);
+    restart();
+    next.focus();
+  }
+
+  els.present.addEventListener('click', openPresenter);
+
   // ---- Result export ---------------------------------------------------------
 
   function resultText(entry) {
-    return entry.groups.map((g) => `${g.name} (${g.members.length}): ${g.members.map((p) => p.name).join(', ')}`).join('\n') + '\n';
+    const one = (e) => e.groups.map((g) => `${g.name} (${g.members.length}): ${g.members.map((p) => p.name).join(', ')}`).join('\n') + '\n';
+    if (!entry.series) return one(entry);
+    return entry.series.map((e, i) => `Round ${i + 1}\n${one(e)}`).join('\n');
   }
 
   function csvCell(v) {
@@ -1644,10 +2220,11 @@ self.onmessage = function (e) {
   }
 
   function resultCsv(entry) {
-    const lines = [['group', 'name'].concat(entry.attrs.map((a) => a.name)).map(csvCell).join(',')];
-    entry.groups.forEach((g) => g.members.forEach((p) => {
-      lines.push([g.name, p.name].concat(entry.attrs.map((a) => p.values[a.id])).map(csvCell).join(','));
-    }));
+    const series = entry.series;
+    const lines = [(series ? ['round'] : []).concat(['group', 'name'], entry.attrs.map((a) => a.name)).map(csvCell).join(',')];
+    (series || [entry]).forEach((e, i) => e.groups.forEach((g) => g.members.forEach((p) => {
+      lines.push((series ? [i + 1] : []).concat([g.name, p.name], entry.attrs.map((a) => p.values[a.id])).map(csvCell).join(','));
+    })));
     return lines.join('\n') + '\n';
   }
 
@@ -1723,8 +2300,17 @@ self.onmessage = function (e) {
   els.resetBtn.addEventListener('click', () => {
     if (!window.confirm('Reset Group Draw? This clears attributes, people, rules and results.')) return;
     if (running) { stopWorker(); running.resolve({ status: 'cancelled' }); }
+    closePresenter();
     history = [];
     shown = null;
+    pick = null;
+    kept = new Set();
+    els.rounds.value = '1';
+    els.fresh.checked = false;
+    els.roundsHint.hidden = true;
+    els.notes.hidden = true;
+    els.roundsNav.hidden = true;
+    els.adjustHint.hidden = true;
     els.results.innerHTML = '';
     els.results.removeAttribute('data-draw-no');
     els.actions.hidden = true;
