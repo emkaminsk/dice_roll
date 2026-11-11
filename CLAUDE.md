@@ -34,7 +34,8 @@ optional extra, and hold new tools to the visual craft of the best existing ones
 
 ```
 appFE/            static site (index.html, style.css, one JS file per tool, random.js)
-tests/test_app.py Playwright e2e suite (serves appFE/ itself on port 8123)
+tests/test_app.py Playwright e2e suite: Quick tools + Group Draw (serves appFE/ on port 8123)
+tests/test_assign_options.py  e2e suite for the Assign Options tab (own server, port 8124)
 .ai/              PRD + tech-stack docs
 .github/workflows deploy.yml (push to master → rsync to VPS), semgrep.yml
 ```
@@ -58,7 +59,7 @@ uv run --with playwright --with pytest pytest tests/
 - Pick the winner with the fair RNG **first**, then animate toward it (see `wheel.js`) —
   never derive the outcome from where an animation happens to stop.
 - Every new tool ships with Playwright tests following the patterns in
-  `tests/test_app.py`, plus README (project structure) and ROADMAP updates.
+  `tests/test_app.py` (new views, like Assign Options, get their own `tests/test_<view>.py`), plus README (project structure) and ROADMAP updates.
 - Fortune-telling content is for entertainment: keep it positive/playful, add a light
   "for entertainment only" note, never give medical/financial/legal advice.
 - **Ship it polished.** A feature isn't done when it works — it's done when it looks and

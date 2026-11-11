@@ -18,7 +18,11 @@ uv run --with playwright --with pytest pytest tests/
 ```
 
 Notes:
-- The tests serve `appFE/` themselves on port 8123 — no server needed beforehand.
+- The tests serve `appFE/` themselves — no server needed beforehand. `test_app.py`
+  (Quick tools + Group Draw) uses port 8123; `test_assign_options.py` (Assign Options
+  tab) uses its own fixtures on port 8124. Both run with the one command above.
+- Editing a shared file (`index.html`, `style.css`, `view_tabs.js`, `page_utils.js`,
+  `random.js`) can affect every tab: both test files must pass.
 - The `page` fixture fails a test on **any** console or page error, so a green suite
   also means a clean console.
 - If `uv` is missing: `pip install playwright pytest && playwright install chromium`
@@ -35,7 +39,7 @@ cd appFE && python3 -m http.server 8000
 ```
 
 Open http://localhost:8000/ (or drive it with Playwright/screenshots when headless).
-Check: each tool produces results, no console errors, layout holds at ~375px width,
+Check: each tool and each tab (Quick tools, Group Draw, Assign Options) produces results, no console errors, layout holds at ~375px width,
 using one tool doesn't disturb another.
 
 ## When it fails

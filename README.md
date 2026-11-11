@@ -3,7 +3,7 @@
 A lightweight, browser-based collection of fair random-selection tools. No login, no
 installation, nothing stored — reload the page to start fresh. It bundles nine
 independent quick tools on one tab, plus a rule-based **Group Draw** view on a second
-tab (linkable as `#group-draw`):
+tab (linkable as `#group-draw`) and an **Assign Options** view on a third (`#assign-options`):
 
 - **🎲 Dice Roller** — roll one or several dice with any number of sides; see each
   die and the total.
@@ -27,6 +27,12 @@ tab (linkable as `#group-draw`):
   mode explains impossible setups; "best effort" returns the closest split. Setups can
   be pasted, imported/exported as JSON, and are autosaved in this browser only. Full
   behaviour, algorithm and fairness notes: [`.ai/spec-group-draw.md`](.ai/spec-group-draw.md).
+- **🏷️ Assign Options** (third tab) — hand out labels (chores, roles, topics…) to people over
+  several rounds: slots per round for each label, labels per person per round, "once per person"
+  labels, prefer variety, keep a round and redraw the rest, by-person / by-label views, copy/CSV,
+  and a full-screen presenter (all at once or person by person). People can be pasted or imported
+  from a Group Draw export. Independent of Group Draw. Spec:
+  [`.ai/spec-assign-options.md`](.ai/spec-assign-options.md).
 
 All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
 for uniform, unbiased results. The wheel is rendered on a `<canvas>` with
@@ -109,9 +115,10 @@ server-side code. See [`.ai/tech-stack.md`](.ai/tech-stack.md) for the rationale
 
 ```
 appFE/
-  index.html         # single page: Quick Tools tab (nine tools) + Group Draw tab
+  index.html         # single page: Quick Tools tab (nine tools) + Group Draw + Assign Options tabs
   style.css          # modern-clean custom theme
   random.js          # shared uniform RNG (crypto.getRandomValues)
+  page_utils.js      # neutral shared helpers (window.PageUtils): CSV cell, download, copy, notice, confetti, Worker runner
   celebration.js     # full-screen winner overlay + confetti (used by the wheel)
   dice_roll.js       # dice roller
   value_selector.js  # add/remove independent picker sections
@@ -123,15 +130,19 @@ appFE/
   team_splitter.js   # team splitter — Fisher–Yates shuffle + round-robin dealing
   lottery.js         # lucky numbers — unique k-combination draw with a ball reveal
   fortune_cookie.js  # fortune cookie — crack animation, fortune + lucky numbers reveal
-  view_tabs.js       # Quick Tools / Group Draw view switcher (URL hash, arrow keys)
+  view_tabs.js       # view tab switcher (URL hash, arrow keys)
   group_draw_solver.js # Group Draw solver — pure, DOM-free (window.GroupDrawSolver)
   group_draw.js      # Group Draw UI — editors, paste/import, Worker draw, reveal, history
+  assign_options_solver.js # Assign Options solver — pure, DOM-free (window.AssignOptionsSolver)
+  assign_options.js  # Assign Options UI — people/labels editors, draw, results, presenter
+  assign_options.css # Assign Options look (ao-* classes, light/dark)
   data/              # content datasets for content-driven tools
     eightball.js     # the 20 classic Magic 8-Ball answers (EIGHTBALL_ANSWERS)
     fortunes.js      # the fortune-cookie fortunes (FORTUNES)
     group_draw_example.js # "Load example" setup for Group Draw (GROUP_DRAW_EXAMPLE)
 tests/
-  test_app.py        # Playwright end-to-end tests
+  test_app.py        # Playwright end-to-end tests (quick tools, Group Draw)
+  test_assign_options.py # Assign Options tests (own server on port 8124)
 ```
 
 ## Tests
