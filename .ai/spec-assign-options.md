@@ -1,6 +1,6 @@
 # Spec — Assign Options (randomly hand out actions / events / options to people, in rounds)
 
-Status: **draft — not implemented** · Owner: Marcin · Related: `CLAUDE.md`, `ROADMAP.md`,
+Status: **implemented (v1, see §11)** · Owner: Marcin · Related: `CLAUDE.md`, `ROADMAP.md`,
 [`spec-group-draw.md`](spec-group-draw.md) (sibling feature; this spec only restates what differs).
 
 ## 1. Summary
@@ -438,3 +438,23 @@ Open — needs the product owner:
   for the presenter?
 - **Q4.** Delivery flow as usual: feature-designer (this spec) → game-builder →
   test-engineer → fairness-auditor → ux-polisher?
+
+Resolved for v1 with the recommended defaults: Q1 — no third policy ("once per person" on/off
+only); Q2 — never the same label twice for one person in one round; Q3 — labels are free text only;
+Q4 — the usual delivery flow.
+
+## 11. Implementation map
+
+| File | Role |
+|---|---|
+| `appFE/page_utils.js` | `window.PageUtils`: `csvCell`, `download`, `copyText` (→ `Promise<boolean>`), `notice`, `confetti` (canvas `.page-confetti`), `createWorkerRunner(factory, { method })` → `{ run, cancel, mode, busy }`, `reduceMotion`. |
+| `appFE/assign_options_solver.js` | `createSolver(randomIndex)` → `{ validateHints, run }` = `window.AssignOptionsSolver`. `model` (index arrays; ∞ = cap at people count) · `hintsFor` (codes `distinct`, `supply`, `exact`, `exact-slots`, `exact-once`, `per-person`, `once`) · `fastRound` (token dealing, variety sweep first) · `flowRound` (randomised augmenting paths; exact fit = fixed-slot labels first, then ∞) · `lookAhead` · `polish` (swap / trade moves, ≤ 300 ms) · `run` (restarts until 1.5 s; `opts.keep` fixes rounds). |
+| `appFE/assign_options.js` | UI IIFE; `els` map of `#ao-*` IDs. People: `renderPeople`, `parseNameList`, paste preview, `parseGroupDraw` + `showImportPanel`/`commitImport`. Labels: `renderLabels`/`labelRow`, `parseLabelList`, all-once, label word (`wordify`). Draw: `renderHints`, `draw`/`finish`/`renderFailure`, `makeEntry`, `display` → `byPerson`/`byLabel`, `renderKeep` (`#ao-keep-bar`), history, `resultText`/`resultCsv`. Presenter: `openPresenter` → `startScreen`/`allScreen` (paging, round reveal, by label)/`personScreen`. IO: `parseOwn`, `readImport`, autosave `assignOptions.setup.v1`. |
+| `appFE/assign_options.css` | Whole look (`.ao-*`), own tokens `--ao-danger/warn/ok` and palette `--ao-c0…11` (light + dark). |
+| `appFE/index.html` | Tab `#tab-assign-options`, panel `#assign-options-view`, `<link>`, scripts. |
+| `appFE/style.css` | Only the generic "View tabs" block: ≤ 576 px the tabs share the width and wrap (three tabs overflowed 375 px). |
+| `tests/test_assign_options.py` | `test_ao_*`, one or more per §8 item; own server on 8124. |
+
+Notes: §8.15's "slots 10" makes 200 slots for 400 picks (infeasible), so the performance test uses
+slots 20 (exact fit) and separately checks that the slots-10 setup is refused quickly. A "Load
+example" (6 people, 4 chores, 4 rounds) was added for parity with Group Draw.

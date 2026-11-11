@@ -23,6 +23,7 @@
     <link rel="stylesheet" href="vendor/bootstrap.min.css">
     <link rel="stylesheet" href="vendor/inter.css">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="assign_options.css">
   </head>
   <body>
     <div class="home-link">
@@ -45,6 +46,9 @@
         <button type="button" class="view-tab" role="tab" id="tab-group-draw"
           aria-controls="group-draw-view" aria-selected="false" tabindex="-1"
           data-hash="group-draw">🧩 Group Draw</button>
+        <button type="button" class="view-tab" role="tab" id="tab-assign-options"
+          aria-controls="assign-options-view" aria-selected="false" tabindex="-1"
+          data-hash="assign-options">🏷️ Assign Options</button>
       </nav>
 
       <div id="quick-tools-view" class="view-panel" role="tabpanel" aria-labelledby="tab-quick-tools">
@@ -480,6 +484,184 @@
             🎲 Fair draw: cryptographically secure randomness. With no rules, or rules a shuffle can satisfy, every split is equally likely; when rules need searching (e.g. keep together, tight limits, nice-to-have rules, avoiding repeat pairings) splits are random but not uniform.</p>
         </section>
       </div>
+
+      <section id="assign-options-view" class="view-panel ao-view" role="tabpanel" aria-labelledby="tab-assign-options" hidden>
+        <section class="tool-card ao-intro" aria-labelledby="ao-title">
+          <div class="ao-intro-head">
+            <div>
+              <h2 id="ao-title">🏷️ Assign Options</h2>
+              <p class="ao-lede">Hand out tasks, roles or topics to people at random — round after round.</p>
+            </div>
+            <div class="ao-setup-actions">
+              <button type="button" id="ao-load-example" class="btn btn-outline-secondary btn-sm">Load example</button>
+              <button type="button" id="ao-import" class="btn btn-outline-secondary btn-sm">Import JSON</button>
+              <input type="file" id="ao-import-file" accept=".json,application/json" hidden>
+              <button type="button" id="ao-export" class="btn btn-outline-secondary btn-sm">Export JSON</button>
+              <button type="button" id="ao-reset" class="btn btn-outline-secondary btn-sm">Reset all</button>
+            </div>
+          </div>
+          <ol class="ao-stepper" aria-label="Steps">
+            <li><div class="ao-stepper-link" data-step="people"><span class="ao-step-num">1</span><span class="ao-stepper-text">People<small id="ao-meta-people"></small></span></div></li>
+            <li><div class="ao-stepper-link" data-step="labels"><span class="ao-step-num">2</span><span class="ao-stepper-text"><span id="ao-stepper-labels">Labels</span><small id="ao-meta-labels"></small></span></div></li>
+            <li><div class="ao-stepper-link" data-step="draw"><span class="ao-step-num">3</span><span class="ao-stepper-text">Draw<small id="ao-meta-draw"></small></span></div></li>
+          </ol>
+          <p class="ao-privacy muted">🔒 Stays in this browser. Nothing is uploaded.
+            <button type="button" id="ao-clear-saved" class="btn btn-link ao-inline-link">Clear saved data</button></p>
+          <p id="ao-io-notice" class="ao-notice" role="status" hidden></p>
+        </section>
+
+        <section class="tool-card ao-step" id="ao-step-people" aria-labelledby="ao-people-title">
+          <div class="ao-step-head">
+            <h2 id="ao-people-title"><span class="ao-step-num">1</span> People</h2>
+            <div class="ao-step-actions">
+              <button type="button" id="ao-people-present" class="btn btn-outline-secondary btn-sm" hidden>Everyone’s here</button>
+              <button type="button" id="ao-people-clear" class="btn btn-outline-secondary btn-sm" hidden>Clear all</button>
+            </div>
+          </div>
+          <p id="ao-people-count" class="ao-count">0 people</p>
+          <p id="ao-people-empty" class="ao-empty muted">No people yet — add rows, paste a list, or import a Group Draw file.</p>
+          <div class="ao-table-wrap" id="ao-people-wrap" hidden>
+            <table id="ao-people-table" class="ao-table">
+              <thead><tr>
+                <th scope="col" class="ao-col-num">#</th>
+                <th scope="col" class="ao-col-here" title="Untick people who are away — they stay in the list but skip the draw">Here</th>
+                <th scope="col">Name</th>
+                <th scope="col" class="ao-col-del"><span class="ao-sr-only">Delete</span></th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="ao-add-person" class="btn btn-primary btn-sm">Add person</button>
+            <button type="button" id="ao-paste-toggle" class="btn btn-outline-secondary btn-sm" aria-expanded="false" aria-controls="ao-paste">Paste a list…</button>
+            <button type="button" id="ao-people-import" class="btn btn-outline-secondary btn-sm">Import Group Draw file…</button>
+          </div>
+          <div id="ao-paste" class="ao-panel" hidden>
+            <label for="ao-paste-text">One name per line. A CSV/TSV also works — only the first column is used and a “name” header is skipped.</label>
+            <textarea id="ao-paste-text" class="form-control" rows="5" placeholder="Anna&#10;Ben&#10;Chloé"></textarea>
+            <div class="btn-row">
+              <button type="button" id="ao-paste-preview" class="btn btn-primary btn-sm">Preview</button>
+              <button type="button" id="ao-paste-cancel" class="btn btn-outline-secondary btn-sm">Cancel</button>
+            </div>
+            <div id="ao-paste-result" class="ao-paste-result"></div>
+          </div>
+          <div id="ao-import-panel" class="ao-panel ao-import-panel" role="region" aria-label="Import people" hidden></div>
+          <p id="ao-people-notice" class="ao-notice" role="status" hidden></p>
+        </section>
+
+        <section class="tool-card ao-step" id="ao-step-labels" aria-labelledby="ao-labels-title">
+          <h2 id="ao-labels-title"><span class="ao-step-num">2</span> <span id="ao-labels-title-text">Labels</span></h2>
+          <p class="ao-help muted">What gets handed out — tasks, roles, topics, prizes… <strong>Slots per round</strong> = how many people get it in every round.</p>
+          <div class="ao-labels-row">
+            <div class="ao-field">
+              <label for="ao-word">Call them</label>
+              <input type="text" id="ao-word" class="form-control form-control-sm" maxlength="30" placeholder="Label" autocomplete="off">
+            </div>
+            <label class="ao-check ao-all-once"><input type="checkbox" id="ao-all-once"> All labels: once per person</label>
+          </div>
+          <p id="ao-labels-count" class="ao-count"></p>
+          <p id="ao-labels-empty" class="ao-empty muted">Nothing to hand out yet — add one below or paste a list.</p>
+          <div class="ao-table-wrap" id="ao-labels-wrap" hidden>
+            <table id="ao-labels-table" class="ao-table">
+              <thead><tr>
+                <th scope="col" class="ao-col-num">#</th>
+                <th scope="col">Name</th>
+                <th scope="col" class="ao-col-slots">Slots per round</th>
+                <th scope="col" class="ao-col-once" title="Nobody gets it more than once in the whole draw">Once per person</th>
+                <th scope="col" class="ao-col-del"><span class="ao-sr-only">Delete</span></th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <form id="ao-label-form" class="ao-label-form" novalidate>
+            <div class="ao-field ao-field-wide">
+              <label for="ao-label-name">Name</label>
+              <input type="text" id="ao-label-name" class="form-control form-control-sm" maxlength="100" placeholder="e.g. Dishes" autocomplete="off">
+            </div>
+            <div class="ao-field ao-field-num">
+              <label for="ao-label-slots">Slots per round</label>
+              <div class="ao-slots">
+                <input type="number" id="ao-label-slots" class="form-control form-control-sm" min="1" max="1000" value="1" inputmode="numeric">
+                <label class="ao-check ao-inf" title="Unlimited"><input type="checkbox" id="ao-label-unlimited"> <span>∞</span></label>
+              </div>
+            </div>
+            <label class="ao-check ao-form-once"><input type="checkbox" id="ao-label-once"> Once per person</label>
+            <div class="ao-field ao-field-action">
+              <button type="submit" id="ao-label-add" class="btn btn-primary btn-sm">Add</button>
+            </div>
+            <p id="ao-label-error" class="ao-field-error" role="alert"></p>
+          </form>
+          <div class="btn-row">
+            <button type="button" id="ao-labels-paste-toggle" class="btn btn-outline-secondary btn-sm" aria-expanded="false" aria-controls="ao-labels-paste">Paste a list…</button>
+          </div>
+          <div id="ao-labels-paste" class="ao-panel" hidden>
+            <label for="ao-labels-paste-text">One per line. Add <code>x2</code> (or <code>×2</code>) for more slots per round, <code>x∞</code> for unlimited.</label>
+            <textarea id="ao-labels-paste-text" class="form-control" rows="5" placeholder="Dishes x2&#10;Trash&#10;Cooking"></textarea>
+            <div class="btn-row">
+              <button type="button" id="ao-labels-paste-add" class="btn btn-primary btn-sm">Add these</button>
+              <button type="button" id="ao-labels-paste-cancel" class="btn btn-outline-secondary btn-sm">Cancel</button>
+            </div>
+          </div>
+          <p id="ao-labels-notice" class="ao-notice" role="status" hidden></p>
+        </section>
+
+        <section class="tool-card ao-step" id="ao-step-draw" aria-labelledby="ao-draw-title">
+          <h2 id="ao-draw-title"><span class="ao-step-num">3</span> Draw</h2>
+          <div class="ao-settings">
+            <div class="ao-field ao-field-num">
+              <label for="ao-rounds">Rounds</label>
+              <input type="number" id="ao-rounds" class="form-control form-control-sm" min="1" max="20" value="1" inputmode="numeric">
+            </div>
+            <div class="ao-field ao-field-num">
+              <label for="ao-per-person">Per person per round</label>
+              <select id="ao-per-person" class="form-control form-control-sm"></select>
+            </div>
+            <div class="ao-options">
+              <label class="ao-check" title="Avoid giving someone a label they already had in another round of this draw (never blocks a draw)"><input type="checkbox" id="ao-variety" checked> Prefer variety</label>
+              <label class="ao-check" title="Off = every slot must be used, so slots and picks must match exactly"><input type="checkbox" id="ao-unfilled" checked> Allow unfilled slots</label>
+            </div>
+          </div>
+          <p id="ao-balance" class="ao-balance"></p>
+          <ul id="ao-hints" class="ao-hints" aria-live="polite"></ul>
+          <div class="ao-draw-bar">
+            <button type="button" id="ao-draw" class="btn btn-primary ao-draw-btn">
+              <span class="ao-reel" aria-hidden="true"><span class="ao-reel-strip"><span></span><span></span><span></span><span></span><span></span></span></span>
+              <span id="ao-draw-label">Draw</span>
+            </button>
+            <button type="button" id="ao-cancel" class="btn btn-outline-secondary btn-sm" hidden>Cancel</button>
+          </div>
+          <div id="ao-keep-bar" class="ao-keep-bar" role="group" aria-label="Keep rounds when drawing again" hidden></div>
+          <p id="ao-keep-hint" class="ao-help muted ao-keep-hint" role="status" hidden></p>
+          <p id="ao-status" class="result-line" aria-live="polite"></p>
+          <div id="ao-alert" class="ao-alert" hidden></div>
+          <div id="ao-results-wrap" class="ao-results-wrap">
+            <p id="ao-outdated" class="ao-outdated" hidden>Setup changed since this draw — press Draw again to refresh.</p>
+            <div id="ao-result-head" class="ao-result-head" hidden>
+              <p id="ao-summary" class="ao-summary"></p>
+              <div class="ao-segmented" role="group" aria-label="Show the result">
+                <button type="button" id="ao-view-person" class="ao-seg-btn" aria-pressed="true">By person</button>
+                <button type="button" id="ao-view-label" class="ao-seg-btn" aria-pressed="false">By label</button>
+              </div>
+            </div>
+            <div id="ao-results" class="ao-results"></div>
+          </div>
+          <div id="ao-result-actions" class="btn-row" hidden>
+            <button type="button" id="ao-copy" class="btn btn-outline-secondary btn-sm">Copy as text</button>
+            <button type="button" id="ao-csv" class="btn btn-outline-secondary btn-sm">Download CSV</button>
+            <button type="button" id="ao-present" class="btn btn-outline-secondary btn-sm">🎬 Present</button>
+          </div>
+          <div id="ao-copy-fallback" class="ao-copy-fallback" hidden>
+            <label for="ao-copy-text">Copy the result from here:</label>
+            <textarea id="ao-copy-text" class="form-control" rows="6" readonly></textarea>
+          </div>
+          <div id="ao-history-wrap" class="ao-history-wrap" hidden>
+            <h3 class="ao-subhead">This session</h3>
+            <ol id="ao-history" class="ao-history"></ol>
+          </div>
+          <p class="ao-fair muted" title="Every draw uses cryptographically secure randomness. With plain settings (no once-per-person labels, variety off) every valid assignment is equally likely within the dealing scheme. When 'once per person' or 'prefer variety' forces a search or repair, assignments are random but not exactly uniform among all valid ones.">
+            🎲 Fair draw: cryptographically secure randomness. With plain settings every assignment is equally likely; “once per person” and “prefer variety” use a random search, so results stay random but not exactly uniform.</p>
+        </section>
+      </section>
     </main>
 
     <footer class="page-footer">
@@ -488,6 +670,7 @@
 
     <script src="theme.js"></script>
     <script src="random.js"></script>
+    <script src="page_utils.js"></script>
     <script src="celebration.js"></script>
     <script src="dice_roll.js"></script>
     <script src="value_selector.js"></script>
@@ -504,5 +687,7 @@
     <script src="data/group_draw_example.js"></script>
     <script src="group_draw_solver.js"></script>
     <script src="group_draw.js"></script>
+    <script src="assign_options_solver.js"></script>
+    <script src="assign_options.js"></script>
   </body>
 </html>

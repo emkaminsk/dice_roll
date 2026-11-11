@@ -48,6 +48,9 @@ Order within a tier is the suggested build order. Check items off as they ship.
 - [x] **Group Draw v2** — attendance toggle, "spread evenly" rule, keep apart/together on labels,
   pin + pair person rules, must / nice-to-have priorities, multi-round draws that avoid repeat
   pairings, tap-to-swap manual adjustment, presenter mode. Spec §12.
+- [x] **Assign Options** — a third view that hands out labels (tasks, roles, topics) to people in
+  rounds: slots per round, labels per person, once-per-person labels, prefer variety, keep a round,
+  presenter. Imports people from a Group Draw export. Spec: [`.ai/spec-assign-options.md`](.ai/spec-assign-options.md).
 
 ## Tier 3 — fortune telling (content-heavy, high engagement)
 
