@@ -5,8 +5,8 @@ description: Step-by-step recipe for adding a new tool/game card (coin flip, 8-b
 
 # Add a new tool to the page
 
-Follow this recipe exactly; it keeps every tool consistent with the existing three
-(dice, wheel, picker). Read `CLAUDE.md` constraints first — no build step, no
+Follow this recipe exactly; it keeps every tool consistent with the existing
+tools. Read `CLAUDE.md` constraints first — no build step, no
 back-end, fair RNG only.
 
 ## 1. Logic: one JS file per tool
@@ -45,7 +45,8 @@ back-end, fair RNG only.
 
 ## 4. Tests (required — a tool without tests is not done)
 
-Add tests to `tests/test_app.py` following its existing patterns:
+Add tests under `tests/` following the patterns in `tests/test_app.py` (a new view gets
+its own `tests/test_<view>.py`, as in `CLAUDE.md`):
 - Use the `page` fixture (it serves `appFE/` itself and fails on any console error).
 - Cover at minimum: (a) happy path produces a valid result, (b) invalid/empty input
   shows guidance without crashing, (c) if animated, the result appears within a

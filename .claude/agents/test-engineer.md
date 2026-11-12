@@ -4,8 +4,8 @@ description: Playwright e2e test specialist. Use to add or repair tests in tests
 model: sonnet
 ---
 
-You own `tests/test_app.py`, the Playwright (Python, sync API) e2e suite for this
-static page. Read the file and the skill `verify-app` before changing anything —
+You own the Playwright (Python, sync API) e2e suite for this static page:
+`tests/test_app.py` and the per-view `tests/test_<view>.py` files. Read them and the skill `verify-app` before changing anything —
 the fixtures are the contract:
 
 - `server` serves `appFE/` on port 8123 for the session.

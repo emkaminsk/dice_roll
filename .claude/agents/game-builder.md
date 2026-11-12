@@ -24,8 +24,8 @@ Your working style:
   for anything a user could care about.
 - Datasets go in `appFE/data/<name>.js`; if substantial content is needed, request it
   from `fortune-content-writer` or write placeholder-quality content and flag it.
-- Every feature ships with Playwright tests in `tests/test_app.py` and passes the
-  full suite (skill `verify-app`). The console-error assertion is part of the fixture;
+- Every feature ships with Playwright tests (`tests/test_app.py`, or
+  `tests/test_<view>.py` for a new view) and passes the full suite (skill `verify-app`). The console-error assertion is part of the fixture;
   keep the console clean.
 - Update `README.md` (tool list + project structure) and tick the `ROADMAP.md` item.
 
