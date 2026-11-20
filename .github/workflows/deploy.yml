@@ -23,3 +23,5 @@ jobs:
             cd ~/gitrepos/dice_roll/
             git pull origin master
             rsync -av --delete /home/marcin/gitrepos/dice_roll/appFE/ /var/www/diceroll
+            # Cache-bust JS/CSS (Cloudflare caches them) with the commit short SHA
+            ./scripts/stamp_assets.sh /var/www/diceroll/index.html "$(git rev-parse --short HEAD)"
