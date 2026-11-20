@@ -11,7 +11,9 @@ The site is static files; production is nginx on a VPS serving `/var/www/dicerol
 
 `.github/workflows/deploy.yml` runs on every push to `master` (and via manual
 `workflow_dispatch`): it SSHes to the VPS, `git pull`s the repo there, and rsyncs
-`appFE/` into the web root with `--delete`.
+`appFE/` into the web root with `--delete`, then `scripts/stamp_assets.sh` appends
+`?v=<git short SHA>` to every local JS/CSS reference in the *deployed* `index.html`
+(Cloudflare caches JS/CSS and we can't purge it; the repo's HTML stays unstamped).
 
 So the release process is simply: get the change onto `master` and push, then verify.
 
@@ -32,8 +34,8 @@ feature branch:
 6. `git push`. If rejected, `git pull --rebase` and retry once; if it fails again,
    stop and report.
 7. **Verify:** the push triggers the workflow — check the Actions run and load
-   https://diceroll.byst.re/ (hard-refresh; assets aren't fingerprinted, so browsers
-   may cache aggressively).
+   https://diceroll.byst.re/ (assets are stamped with the commit SHA, so a
+   normal refresh should pick up new JS/CSS; `curl -s .../index.html | grep '?v='` confirms).
 8. **Report:** test count, merge commit hash, and the Actions run status.
 
 Don't delete the feature branch or force-push unless asked.
