@@ -699,6 +699,44 @@
 
   els.table.addEventListener('input', onCellEdit);
   els.table.addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') onCellEdit(e); });
+  // Keyboard: arrows move between cells, Space opens a dropdown (Space again picks),
+  // Enter adds a person. Keys never reach a <select> while its native list is open,
+  // so up/down/space there keep their native meaning.
+  els.table.addEventListener('keydown', (e) => {
+    const c = e.target;
+    if (!c.dataset || !c.dataset.field || e.isComposing) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      els.addPerson.click();
+      return;
+    }
+    if (e.key === ' ' && c.tagName === 'SELECT' && typeof c.showPicker === 'function') {
+      e.preventDefault();
+      try { c.showPicker(); } catch (err) { /* not allowed right now: ignore */ }
+      return;
+    }
+    const dr = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+    if (!dr) return;
+    if (c.type === 'text' && dr[1]) {
+      const atEdge = dr[1] < 0 ? c.selectionStart === 0 : c.selectionEnd === c.value.length;
+      if (!atEdge) return; // let the caret move inside the text first
+    }
+    const cells = (tr) => Array.from(tr.querySelectorAll('input[data-field], select[data-field]'));
+    const tr = c.closest('tr');
+    const col = cells(tr).indexOf(c);
+    let target = null;
+    if (dr[0]) {
+      const row = dr[0] < 0 ? tr.previousElementSibling : tr.nextElementSibling;
+      if (row) target = cells(row)[col];
+    } else {
+      target = cells(tr)[col + dr[1]];
+    }
+    e.preventDefault();
+    if (!target) return;
+    target.focus();
+    if (target.type === 'text') target.select();
+  });
   els.table.addEventListener('click', (e) => {
     const btn = e.target.closest('.gd-person-delete');
     if (!btn) return;

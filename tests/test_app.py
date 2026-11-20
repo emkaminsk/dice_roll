@@ -819,6 +819,40 @@ def test_gd_people_table_add_edit_delete(page):
     assert page.locator("#gd-people-table td.is-duplicate").count() == 0
 
 
+def test_gd_people_table_keyboard_navigation(page):
+    """Arrows move between cells, Enter adds a person, Space opens a category dropdown."""
+    _gd_open(page)
+    _gd_import(page, _gd_setup(people=[]))
+    page.click("#gd-add-person")
+    page.keyboard.type("Ann")
+    page.keyboard.press("Enter")  # Add person; focus lands in the new row's name
+    page.keyboard.type("Bob")
+    rows = page.locator("#gd-people-table tbody tr")
+    assert rows.count() == 2
+    assert rows.nth(1).locator("input[data-field='name']").input_value() == "Bob"
+
+    page.keyboard.press("ArrowUp")
+    assert page.evaluate("document.activeElement.closest('tr').rowIndex") == 1
+    page.keyboard.press("ArrowRight")  # caret is selected-all after the move, so this leaves the cell
+    focused = page.evaluate("document.activeElement.dataset.field")
+    assert focused not in ("name", None)
+    page.keyboard.press("ArrowLeft")
+    assert page.evaluate("document.activeElement.dataset.field") == "name"
+    page.keyboard.press("ArrowDown")
+    assert page.evaluate("document.activeElement.closest('tr').rowIndex") == 2
+
+    # Walk right to the category select and change it with the keyboard.
+    sel = rows.nth(1).locator("select")
+    for _ in range(10):
+        if page.evaluate("document.activeElement.tagName") == "SELECT":
+            break
+        page.keyboard.press("ArrowRight")
+    assert page.evaluate("document.activeElement.tagName") == "SELECT"
+    page.keyboard.press("ArrowUp")  # closed select: moves rows, value unchanged
+    assert page.evaluate("document.activeElement.closest('tr').rowIndex") == 1
+    assert sel.input_value() == ""
+
+
 def test_gd_paste_with_header_reports_problems(page):
     """TSV with a header maps by name; bad integers and unknown categories are reported before import."""
     _gd_open(page)
