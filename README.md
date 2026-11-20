@@ -31,7 +31,7 @@ tab (linkable as `#group-draw`) and an **Assign Options** view on a third (`#ass
   several rounds: slots per round for each label, labels per person per round, "once per person"
   labels, prefer variety, keep a round and redraw the rest, by-person / by-label views, copy/CSV,
   and a full-screen presenter (all at once or person by person). People can be pasted or imported
-  from a Group Draw export. Independent of Group Draw. Spec:
+  from a Group Draw export or loaded straight from the Group Draw tab. Group Draw attributes can be reordered by dragging (or ↑/↓ keys). Independent of Group Draw. Spec:
   [`.ai/spec-assign-options.md`](.ai/spec-assign-options.md).
 
 All randomness uses the browser's `crypto.getRandomValues()` with rejection sampling
