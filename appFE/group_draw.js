@@ -415,7 +415,12 @@
         type: 'button', class: 'btn btn-link btn-remove gd-attr-delete', 'aria-label': `Delete attribute ${attr.name}`, text: '×',
       });
       del.addEventListener('click', () => deleteAttribute(attr));
+      const handle = el('button', {
+        type: 'button', class: 'gd-attr-handle', title: 'Drag to reorder (or use ↑ ↓ keys)',
+        'aria-label': `Reorder attribute ${attr.name}: drag, or press arrow up or down`, text: '⠿',
+      });
       const head = el('div', { class: 'gd-attr-head' }, [
+        handle,
         nameInput,
         el('span', { class: `gd-kind gd-kind-${attr.kind}`, text: KIND_LABEL[attr.kind] }),
         del,
@@ -426,6 +431,70 @@
       els.attrList.appendChild(row);
     });
   }
+
+  function commitAttrOrder(ids) {
+    const sorted = ids.map(attrById).filter(Boolean);
+    if (sorted.length !== state.attributes.length || sorted.every((a, i) => a === state.attributes[i])) return false;
+    state.attributes = sorted;
+    changed({ table: true, rules: true });
+    return true;
+  }
+
+  // Reorder attributes: pointer drag (mouse + touch) or ArrowUp/ArrowDown on the handle.
+  (function initAttrReorder() {
+    const list = els.attrList;
+    let drag = null;
+    const rowIds = () => Array.from(list.children).map((r) => r.dataset.attrId);
+    list.addEventListener('pointerdown', (e) => {
+      const h = e.target.closest('.gd-attr-handle');
+      if (!h || (e.button !== undefined && e.button !== 0)) return;
+      const row = h.closest('.gd-attr-row');
+      drag = { row, pointer: e.pointerId };
+      row.classList.add('is-dragging');
+      try { h.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      e.preventDefault();
+    });
+    list.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.pointer) return;
+      const rows = Array.from(list.children).filter((r) => r !== drag.row);
+      const next = rows.find((r) => {
+        const b = r.getBoundingClientRect();
+        return e.clientY < b.top + b.height / 2;
+      });
+      if (next) { if (drag.row.nextSibling !== next) list.insertBefore(drag.row, next); }
+      else if (list.lastChild !== drag.row) list.appendChild(drag.row);
+    });
+    const end = (e) => {
+      if (!drag || e.pointerId !== drag.pointer) return;
+      const { row } = drag;
+      drag = null;
+      row.classList.remove('is-dragging');
+      if (!commitAttrOrder(rowIds())) return;
+      const h = list.querySelector(`[data-attr-id="${CSS.escape(row.dataset.attrId)}"] .gd-attr-handle`);
+      if (h) h.focus({ preventScroll: true });
+    };
+    list.addEventListener('pointerup', end);
+    list.addEventListener('pointercancel', (e) => {
+      if (!drag) return;
+      drag = null;
+      renderAttributes();
+    });
+    list.addEventListener('keydown', (e) => {
+      const h = e.target.closest('.gd-attr-handle');
+      if (!h || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+      e.preventDefault();
+      const id = h.closest('.gd-attr-row').dataset.attrId;
+      const ids = state.attributes.map((a) => a.id);
+      const i = ids.indexOf(id);
+      const j = i + (e.key === 'ArrowUp' ? -1 : 1);
+      if (j < 0 || j >= ids.length) return;
+      ids.splice(j, 0, ids.splice(i, 1)[0]);
+      commitAttrOrder(ids);
+      renderAttributes();
+      const nh = list.querySelector(`[data-attr-id="${CSS.escape(id)}"] .gd-attr-handle`);
+      if (nh) nh.focus();
+    });
+  })();
 
   function optionChips(attr, err) {
     const wrap = el('div', { class: 'gd-chips' });
@@ -2328,6 +2397,11 @@ self.onmessage = function (e) {
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* storage unavailable */ }
     notice(els.ioNotice, 'Saved data cleared from this browser. The current setup stays until you reload.');
   });
+
+  // Read-only snapshot for other tabs (Assign Options "load from Group Draw").
+  window.GroupDrawPeople = () => state.people
+    .filter((p) => p.name.trim() !== '')
+    .map((p) => (p.absent ? { name: p.name.trim(), absent: true } : { name: p.name.trim() }));
 
   // ---- Init --------------------------------------------------------------------
 

@@ -883,3 +883,19 @@ def test_ao_slots_and_per_person_together(page):
     loose = _setup(_people(6), labels[:3] + [_label(3, "Shopping", 7)], rounds=2, per=2, unfilled=True)
     for _ in range(10):
         assert _problems(loose, _draw(page)) == []
+
+
+def test_ao_load_people_from_group_draw_tab(page):
+    page.click("#tab-assign-options")
+    page.click("#ao-people-from-gd")
+    assert "No people found" in page.text_content("#ao-people-notice")
+    page.click("#tab-group-draw")
+    page.click("#gd-load-example")
+    page.on("dialog", lambda d: d.accept())
+    n = page.locator("#gd-people-table tbody tr").count()
+    page.click("#tab-assign-options")
+    page.click("#ao-people-from-gd")
+    page.wait_for_selector("#ao-import-panel:not([hidden])")
+    assert "Group Draw tab" in page.text_content("#ao-import-panel")
+    page.click("#ao-import-replace")
+    assert page.locator("#ao-people-table tbody tr").count() == n

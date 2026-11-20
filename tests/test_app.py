@@ -2427,3 +2427,22 @@ def test_gd_new_rules_survive_export_import_roundtrip(page):
     # "together" pairs and size rules can never be nice-to-have: the flag is dropped on import.
     _gd_import(page, dict(setup, rules=[WITH | {"soft": True}, {"id": "s", "type": "size", "scope": "all", "min": 1, "max": 9, "soft": True}]))
     assert page.locator(".gd-rule").count() == 2 and page.locator(".gd-rule.is-soft").count() == 0
+
+
+def test_gd_attributes_reorder_drag_and_keyboard(page):
+    """Attributes can be reordered by dragging the handle or with arrow keys; table columns follow."""
+    _gd_open(page)
+    for name in ["a", "b", "c"]:
+        page.fill("#gd-attr-name", name)
+        page.select_option("#gd-attr-kind", "label")
+        page.click("#gd-attr-add")
+    heads = lambda: page.eval_on_selector_all("#gd-people-table thead th", "t => t.map(x => x.textContent)")
+    page.locator(".gd-attr-row").nth(2).locator(".gd-attr-handle").drag_to(
+        page.locator(".gd-attr-row").nth(0).locator(".gd-attr-handle"), target_position={"x": 5, "y": 1})
+    names = lambda: page.eval_on_selector_all(".gd-attr-name-input", "e => e.map(x => x.value)")
+    assert names() == ["c", "a", "b"]
+    page.locator(".gd-attr-row").nth(0).locator(".gd-attr-handle").focus()
+    page.keyboard.press("ArrowDown")
+    assert names() == ["a", "c", "b"]
+    page.click("#gd-add-person")
+    assert heads()[3:6] == ["a", "c", "b"]

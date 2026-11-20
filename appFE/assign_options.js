@@ -29,7 +29,7 @@
     metaPeople: $('#ao-meta-people'), metaLabels: $('#ao-meta-labels'), metaDraw: $('#ao-meta-draw'), stepLabelsText: $('#ao-stepper-labels'),
     peopleCount: $('#ao-people-count'), peopleEmpty: $('#ao-people-empty'), peopleWrap: $('#ao-people-wrap'),
     peopleTable: $('#ao-people-table'), peoplePresent: $('#ao-people-present'), peopleClear: $('#ao-people-clear'),
-    addPerson: $('#ao-add-person'), pasteToggle: $('#ao-paste-toggle'), peopleImport: $('#ao-people-import'),
+    addPerson: $('#ao-add-person'), pasteToggle: $('#ao-paste-toggle'), peopleImport: $('#ao-people-import'), peopleFromGd: $('#ao-people-from-gd'),
     paste: $('#ao-paste'), pasteText: $('#ao-paste-text'), pastePreview: $('#ao-paste-preview'), pasteCancel: $('#ao-paste-cancel'),
     pasteResult: $('#ao-paste-result'), importPanel: $('#ao-import-panel'), peopleNotice: $('#ao-people-notice'),
     labelsTitle: $('#ao-labels-title-text'), word: $('#ao-word'), allOnce: $('#ao-all-once'),
@@ -435,7 +435,7 @@
     const box = els.importPanel;
     box.innerHTML = '';
     const away = plan.people.filter((p) => p.absent).length;
-    box.appendChild(el('p', { class: 'ao-panel-title', text: `Group Draw file: ${plural(plan.people.length, 'person', 'people')}${away ? `, ${away} away` : ''}.` }));
+    box.appendChild(el('p', { class: 'ao-panel-title', text: `${plan.fromTab ? 'Group Draw tab' : 'Group Draw file'}: ${plural(plan.people.length, 'person', 'people')}${away ? `, ${away} away` : ''}.` }));
     box.appendChild(el('p', { class: 'ao-help muted', text: 'Only names and who is away are used — attributes, rules and groups are ignored. Group Draw itself is not changed.' }));
     const replace = el('button', { type: 'button', id: 'ao-import-replace', class: 'btn btn-primary btn-sm', text: 'Replace people' });
     const add = el('button', { type: 'button', id: 'ao-import-add', class: 'btn btn-outline-secondary btn-sm', text: 'Add to existing' });
@@ -1465,6 +1465,13 @@
 
   els.importBtn.addEventListener('click', () => els.importFile.click());
   els.peopleImport.addEventListener('click', () => els.importFile.click());
+  if (els.peopleFromGd) {
+    els.peopleFromGd.addEventListener('click', () => {
+      const people = typeof window.GroupDrawPeople === 'function' ? window.GroupDrawPeople() : [];
+      if (!people.length) { U.notice(els.peopleNotice, 'No people found in the Group Draw tab yet.', 'error'); return; }
+      showImportPanel({ people, ignored: false, fromTab: true });
+    });
+  }
   els.importFile.addEventListener('change', () => {
     const file = els.importFile.files && els.importFile.files[0];
     els.importFile.value = '';
